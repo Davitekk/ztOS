@@ -21,6 +21,7 @@ Messaging and Settings work unchanged, and does it all through ModemManager
 import os
 import subprocess
 import sys
+import threading
 import time
 
 from gi.repository import Gio, GLib
@@ -309,25 +310,79 @@ def apn():
     return cfg
 
 
-def data(on):
+# Mobile data is switched by a worker thread, one step at a time, and only to
+# the latest wish. ModemManager 1.24 crashes (SIGSEGV, the SIM gone until it
+# restarts) when connections come back to back: once the connection was
+# deleted and added again with autoconnect on, so NetworkManager started one
+# while `nmcli connection up` started another, and quick off/on taps made a
+# third before the network had let the last one go ("OutOfCall").
+DATA_SETTLE_S = 4                 # after a disconnect, before connecting again
+data_wish = {'on': None, 'reapply': False}
+data_lock = threading.Lock()
+data_wake = threading.Event()
+
+
+def nmcli(*args, timeout=30):
+    return subprocess.run(['nmcli', *args], capture_output=True, text=True, timeout=timeout)
+
+
+def data(on, reapply=False):
+    """Mobile data on or off (reapply: the access point changed)."""
     if on:
         open(WANT_DATA, 'w').close()
-        cfg = apn()
-        subprocess.run(['nmcli', 'connection', 'delete', NM_CONNECTION], capture_output=True)
-        args = ['nmcli', 'connection', 'add', 'type', 'gsm', 'ifname', '*', 'con-name', NM_CONNECTION,
-                'gsm.apn', cfg['apn'], 'connection.autoconnect', 'yes']
-        if cfg['user']:
-            args += ['gsm.username', cfg['user'], 'gsm.password', cfg['password']]
-        subprocess.run(args, capture_output=True)
-        subprocess.run(['nmcli', 'connection', 'up', NM_CONNECTION], capture_output=True, timeout=90)
     else:
         try:
             os.unlink(WANT_DATA)
         except FileNotFoundError:
             pass
-        subprocess.run(['nmcli', 'connection', 'down', NM_CONNECTION], capture_output=True)
-        subprocess.run(['nmcli', 'connection', 'modify', NM_CONNECTION, 'connection.autoconnect', 'no'],
-                       capture_output=True)
+    with data_lock:
+        data_wish['on'] = on
+        data_wish['reapply'] = data_wish['reapply'] or reapply
+    data_wake.set()
+
+
+def data_connection(reapply):
+    """Our NetworkManager connection, made (autoconnect off) if it is missing or its access point changed."""
+    cfg = apn()
+    current = nmcli('-t', '-g', 'gsm.apn', 'connection', 'show', NM_CONNECTION)
+    if current.returncode == 0 and current.stdout.strip() == cfg['apn'] and not reapply:
+        return
+    nmcli('connection', 'delete', NM_CONNECTION)
+    args = ['connection', 'add', 'type', 'gsm', 'ifname', '*', 'con-name', NM_CONNECTION,
+            'gsm.apn', cfg['apn'], 'connection.autoconnect', 'no']
+    if cfg['user']:
+        args += ['gsm.username', cfg['user'], 'gsm.password', cfg['password']]
+    nmcli(*args)
+
+
+def data_worker():
+    applied, down_at = None, 0.0
+    while True:
+        data_wake.wait()
+        data_wake.clear()
+        with data_lock:
+            on, reapply = data_wish['on'], data_wish['reapply']
+            data_wish['reapply'] = False
+        if on is None or (on == applied and not reapply):
+            continue
+        try:
+            if on:
+                time.sleep(max(0.0, down_at + DATA_SETTLE_S - time.monotonic()))
+                if data_wake.is_set():          # changed its mind meanwhile
+                    continue
+                data_connection(reapply)
+                nmcli('connection', 'up', NM_CONNECTION, timeout=90)
+                # from now on NetworkManager brings it back by itself (after a
+                # drop, at the next start)
+                nmcli('connection', 'modify', NM_CONNECTION, 'connection.autoconnect', 'yes')
+            else:
+                nmcli('connection', 'modify', NM_CONNECTION, 'connection.autoconnect', 'no')
+                nmcli('connection', 'down', NM_CONNECTION, timeout=60)
+                down_at = time.monotonic()
+            applied = on
+        except (OSError, subprocess.TimeoutExpired) as error:
+            log(f'data {"on" if on else "off"}: {error}')
+        GLib.idle_add(lambda: tick() and False)     # once, on the main loop
 
 
 # ---- the control pipe ---------------------------------------------------------
@@ -371,7 +426,7 @@ def command(line):
         elif line in ('speaker on', 'speaker off'):
             callaudio('-s', '1' if line == 'speaker on' else '0')
         elif line == 'apn' and os.path.exists(WANT_DATA):
-            data(True)
+            data(True, reapply=True)
     except (GLib.Error, OSError, subprocess.TimeoutExpired) as error:
         log(f'{line[:20]}: {getattr(error, "message", error)}')
     tick()
@@ -412,6 +467,7 @@ if not os.path.exists(APN_FILE):
 os.chmod(APN_FILE, 0o666)
 GLib.io_add_watch(GLib.IOChannel.unix_new(ctl_fd), GLib.PRIORITY_DEFAULT, GLib.IO_IN, on_ctl)
 GLib.timeout_add_seconds(PERIOD_S, tick)
+threading.Thread(target=data_worker, daemon=True).start()
 tick()
 log('up: ModemManager behind ztoscorenetworkingd\'s interface')
 GLib.MainLoop().run()

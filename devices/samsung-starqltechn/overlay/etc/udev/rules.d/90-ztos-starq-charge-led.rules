@@ -1,0 +1,3 @@
+# The charging light follows the battery and the charger (ztos-starq-charge-led)
+ACTION=="change", SUBSYSTEM=="power_supply", KERNEL=="max77705-charger", RUN+="/usr/bin/systemctl start --no-block ztos-starq-charge-led.service"
+ACTION=="change", SUBSYSTEM=="power_supply", KERNEL=="max170xx_battery", RUN+="/usr/bin/systemctl start --no-block ztos-starq-charge-led.service"

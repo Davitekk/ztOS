@@ -1,0 +1,10 @@
+[Unit]
+Description=Galaxy S9 (Snapdragon): the charging light
+Documentation=file:///usr/local/sbin/ztos-starq-charge-led
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ztos-starq-charge-led
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,43 @@
+#!/bin/sh
+# The front light as Samsung's own system, and the Exynos S9's zrn-charge,
+# have it: red while charging, green once full, off otherwise; and,
+# discharging with the battery at 15 % or less, a slow red blink. This phone
+# has one multicolour LED (MAX77705 RGB, rgb:status), not three.
+#
+# Run by udev on every battery or charger change, and once at boot. The
+# charger's limits need nothing here: on this phone they are already 1.5 A.
+L=/sys/class/leds/rgb:status
+B=/sys/class/power_supply/max170xx_battery
+C=/sys/class/power_supply/max77705-charger
+[ -w "$L/multi_intensity" ] || exit 0
+LOW=15
+DIM=24		# of 255: as bright as the Exynos S9's
+
+steady() {	# r g b
+	echo none > "$L/trigger"
+	echo "$1 $2 $3" > "$L/multi_intensity"
+	if [ "$1$2$3" = 000 ]; then echo 0 > "$L/brightness"; else echo $DIM > "$L/brightness"; fi
+}
+
+blink() {	# red, once a second: the battery is low
+	grep -q '\[timer\]' "$L/trigger" && return 0
+	echo "255 0 0" > "$L/multi_intensity"
+	echo $DIM > "$L/brightness"
+	echo timer > "$L/trigger"
+	echo 300 > "$L/delay_on"
+	echo 700 > "$L/delay_off"
+}
+
+level=$(cat "$B/capacity" 2>/dev/null || echo 100)
+online=$(cat "$C/online" 2>/dev/null || echo 0)
+# Green means "on a charger and full", never just "a cable is in"
+case "$(cat "$B/status" 2>/dev/null)" in
+Charging)
+	if [ "$level" -ge 100 ]; then steady 0 255 0; else steady 255 0 0; fi ;;
+Full)	steady 0 255 0 ;;
+Discharging)
+	if [ "$level" -le $LOW ]; then blink; else steady 0 0 0; fi ;;
+*)	if [ "$online" = 1 ] && [ "$level" -ge 95 ]; then steady 0 255 0
+	elif [ "$online" != 1 ] && [ "$level" -le $LOW ]; then blink
+	else steady 0 0 0; fi ;;
+esac

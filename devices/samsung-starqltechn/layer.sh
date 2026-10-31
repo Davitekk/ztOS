@@ -62,4 +62,4 @@ fi
 # USB serial port has a login (COM port on Windows, /dev/ttyACM0 on Linux)
 DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0
 	ztos-starq-firmware rmtfs tqftpserv msm-modem-uim-selection ModemManager ztoscorenetworking 81voltd q6voiced
-	hexagonrpcd-sdsp iio-sensor-proxy bluetooth ztos-starq-bluetooth ztos-starq-rtc ztos-starq-rtc-save.timer"
+	hexagonrpcd-sdsp iio-sensor-proxy bluetooth ztos-starq-bluetooth ztos-starq-rtc ztos-starq-rtc-save.timer ztos-starq-charge-led"

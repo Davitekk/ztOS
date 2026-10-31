@@ -23,13 +23,13 @@ notes say what. **Untested**: written, not yet tried with real use.
 | Input | Touchscreen | Works | S6SY761, multi-touch |
 | Input | Power, volume and Bixby keys | Works | Bixby is `KEY_ASSISTANT` |
 | Input | Vibration | Works | ztOSIAL's generic Haptics1 |
-| Input | Notification light | Works | MAX77705 RGB: colour and blink through ztOSIAL Lights1 |
+| Input | Notification light | Works | MAX77705 RGB: red while charging, green when full, a red blink at 15 % and below; colour and blink through ztOSIAL Lights1 |
 | 3D | GPU | Works | Adreno 630 through freedreno |
 | Power | Battery and charger | Works | MAX17042 gauge, MAX77705 charger |
 | Power | Clock across reboots | Works | The PMIC's RTC with a saved offset ([`ztos-starq-rtc`](overlay/usr/local/sbin/ztos-starq-rtc)); the AP may not set it |
 | Network | Wi-Fi | Works | BCM4361 B2 on PCIe (brcmfmac), the phone's own MAC address |
 | Network | Bluetooth | Works | BCM4361 on UART6 at 3 Mbaud, the phone's own address; scanning, pairing and headphone audio tried |
-| Network | Mobile data (4G) | Works | ModemManager over QRTR; NetworkManager; the access point from the SIM's operator |
+| Network | Mobile data (4G) | Partial | ModemManager over QRTR; NetworkManager; the access point from the SIM's operator. Turning it off and on again can crash ModemManager 1.24.2 (it restarts by itself, the SIM back after ~30 s) |
 | Network | USB networking to a computer | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM, registration, signal | Works | 4G; EFS (IMEI, calibration) is never written |
 | Modem | SMS | Works | Sending and receiving tried |
