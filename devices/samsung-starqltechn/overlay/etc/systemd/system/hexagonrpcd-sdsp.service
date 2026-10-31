@@ -5,6 +5,8 @@
 Description=FastRPC file server for the sensor DSP (SLPI)
 After=ztos-starq-firmware.service
 Requires=ztos-starq-firmware.service
+# started by udev when the DSP is up (81-ztos-starq-sensors.rules), and at boot
+# if it already is
 ConditionPathExists=/dev/fastrpc-sdsp
 
 [Service]

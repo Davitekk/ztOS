@@ -35,7 +35,7 @@ if [ "${1:-}" = --export ]; then
 	for f in "$@"; do
 		mkdir -p "$ROOT/$(dirname "$f")"
 		docker run --rm -v "$VOLUME:/build" -v "$host_root:/host" "$IMAGE" \
-			cp "/build/ztOS/$f" "/host/$f"
+			cp -r "/build/ztOS/$f" "/host/$(dirname "$f")/"
 		echo "exported $f"
 	done
 	exit 0
@@ -66,6 +66,9 @@ docker run --rm -i --privileged -v "$VOLUME:/build" -v "$host_root:/host:ro" "$I
 			rm -f "/build/ztOS/$path"; ln -s "$target" "/build/ztOS/$path" ;;
 		esac
 	done
+	# The installer copies files from here into the root with cp -a: they
+	# must be root'"'"'s, as a checkout is inside the installer'"'"'s user namespace
+	find /build/ztOS \( -path /build/ztOS/build -o -path /build/ztOS/out \) -prune -o -exec chown -h 0:0 {} +
 '
 
 # As root in the container: the installer then builds in a plain mount

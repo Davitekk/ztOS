@@ -12,6 +12,19 @@ scale = 2.5
 [gsi]
 min = "0.2.0"
 
+[ial.Power1]
+backend = "generic"
+# MAX77705: the fuel gauge (max17042 driver) and the charger
+battery = "/sys/class/power_supply/max170xx_battery"
+charger = "/sys/class/power_supply/max77705-charger"
+current_sign = 1                 # + charging, - draining, as ztOSIAL
+current_node = "/sys/class/power_supply/max170xx_battery/current_now"
+
+[ial.Lights1]
+# one multicolour LED (rgb:status), not three
+backend = "vendor"
+module = "/vendor/ztos/ial/starqltechn.py"
+
 [ial.Perf1]
 backend = "generic"
 # Adreno 630 (msm's devfreq); thermal from the kernel's thermal zones

@@ -6,8 +6,15 @@ Sensors1: the light, proximity and motion sensors are on the sensor DSP
 (hexagonrpcd serves the DSP its files) and offers them on D-Bus
 (net.hadess.SensorProxy); this backend reads them there, and falls back to
 the generic IIO one for anything the proxy does not have.
+
+Lights1: the notification light is the MAX77705's RGB LED, one multicolour
+LED (rgb:status, multi_intensity) rather than three, which the generic
+backend looks for.
 """
-from ztos_ial.backends import NotSupported
+import glob
+import os
+
+from ztos_ial.backends import NotSupported, exists, read_int, write
 from ztos_ial.backends import generic
 
 PROXY = 'net.hadess.SensorProxy'
@@ -90,3 +97,42 @@ class Sensors(generic.Sensors):
         except Exception as error:
             raise NotSupported(f'{sensor}: {error}') from None
         return super().m_Read(sensor)
+
+
+# ---- Lights1: the MAX77705's multicolour LED --------------------------------
+
+class Lights(generic.Lights):
+    def __init__(self, config, manifest):
+        super().__init__(config, manifest)
+        self.multi = config.get('multicolor') or self._guess_multi()
+
+    @staticmethod
+    def _guess_multi():
+        for path in sorted(glob.glob(os.path.join(generic.LEDS, '*:status'))):
+            if exists(os.path.join(path, 'multi_intensity')):
+                return os.path.basename(path)
+        return ''
+
+    def available(self):
+        return bool(self.multi) or super().available()
+
+    def props(self):
+        values = super().props()
+        if self.multi:
+            values['Lights'] = ['notification']
+        return values
+
+    def m_Set(self, light, colour, on_ms, off_ms):
+        if light != 'notification' or not self.multi:
+            return super().m_Set(light, colour, on_ms, off_ms)
+        base = os.path.join(generic.LEDS, self.multi)
+        rgb = [(int(colour) >> shift) & 0xff for shift in (16, 8, 0)]
+        # trigger first: leaving the timer drops the brightness to 0
+        write(os.path.join(base, 'trigger'), 'none')
+        write(os.path.join(base, 'multi_intensity'), ' '.join(str(v) for v in rgb))
+        lit = any(rgb)
+        write(os.path.join(base, 'brightness'), read_int(os.path.join(base, 'max_brightness'), 255) if lit else 0)
+        if lit and on_ms and off_ms:
+            write(os.path.join(base, 'trigger'), 'timer')
+            write(os.path.join(base, 'delay_on'), int(on_ms))
+            write(os.path.join(base, 'delay_off'), int(off_ms))

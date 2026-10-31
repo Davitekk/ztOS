@@ -15,7 +15,7 @@ main ztOS port.
 | Kernel | [sdm845-mainline](https://gitlab.com/sdm845-mainline/linux) 7.1-rc1 (`sdm845-7.1-rc1-r0`, the tree postmarketOS ships for this phone), postmarketOS's config plus [`kernel/ztos.config`](kernel/ztos.config) |
 | Kernel patches | brcmfmac for the BCM4361 B2 and the MAX77705 USB-C switch, both from the [Galaxy S9+ mainline port](https://github.com/SheroAbi/galaxy-s9plus-mainline-linux); btbcm's quirk; the S6E3HA8 panel's AOR backlight (Samsung's table, as on the Exynos S9); device tree additions read from the SCV38's own stock tree: [`kernel/patch-dts.py`](kernel/patch-dts.py) |
 | Boot | Samsung's bootloader starts U-Boot (2023.01-rc2 with postmarketOS's patches) from BOOT, which starts the kernel, its device tree and ztOS's boot stage from a FIT image: [`boot/build-boot.sh`](boot/build-boot.sh) |
-| Boot stage | the S9's zboot ([`initramfs/init`](initramfs/init)): finds the `ZR_ARCH` root in USERDATA; if it cannot, a rescue shell on USB (serial and NCM network, telnet on 172.16.42.1) that saves its log to CACHE |
+| Boot stage | the S9's zboot ([`initramfs/init`](initramfs/init)): finds the `ZR_ARCH` root in USERDATA; if it cannot, a rescue shell on USB (serial and RNDIS network, telnet on 172.16.42.1) that saves its log to CACHE |
 | Firmware | the phone's own, from its APNHLOS, MODEM, DSP, VENDOR and PERSIST partitions, mounted read-only at every boot ([`ztos-starq-firmware`](overlay/usr/local/sbin/ztos-starq-firmware)); Wi-Fi and Bluetooth addresses from EFS. Nothing is copied into the image and no partition is ever written |
 | Modem, DSPs | qrtr, rmtfs (read-only: the modem's EFS copies are never written back), tqftpserv, msm-modem-uim-selection, hexagonrpcd, q6voiced and 81voltd, built from source at Alpine's versions ([`userspace/`](userspace/)); ModemManager |
 | ztOSIAL | [`vendor/ztos/manifest.toml`](vendor/ztos/manifest.toml): generic backends, and [`starqltechn.py`](vendor/ztos/ial/starqltechn.py) for the sensors behind iio-sensor-proxy |
@@ -53,12 +53,17 @@ On **Windows** (Docker Desktop, from Git Bash; [Android platform tools](https://
 ```sh
 devices/samsung-starqltechn/docker/run.sh devices/samsung-starqltechn/kernel/build-kernel.sh
 devices/samsung-starqltechn/docker/run.sh python3 installer/ztos build --target starqltechn --user <you> --password <password>
-devices/samsung-starqltechn/docker/run.sh --export build/ztos/starqltechn/root.img build/ztos/starqltechn/stage/boot/ztos-starqltechn-boot.img
+devices/samsung-starqltechn/docker/run.sh sh devices/samsung-starqltechn/scripts/root-chunks.sh build/ztos/starqltechn/root.img build/ztos/starqltechn/root-chunks
+devices/samsung-starqltechn/docker/run.sh --export build/ztos/starqltechn/root-chunks build/ztos/starqltechn/stage/boot/ztos-starqltechn-boot.img
 devices/samsung-starqltechn/scripts/backup.sh
-devices/samsung-starqltechn/scripts/flash-root.sh build/ztos/starqltechn/root.img
+devices/samsung-starqltechn/scripts/flash-root.sh build/ztos/starqltechn/root-chunks
 devices/samsung-starqltechn/scripts/flash.sh BOOT build/ztos/starqltechn/stage/boot/ztos-starqltechn-boot.img
 adb reboot
 ```
+
+The root image is 10 GB, mostly empty: `root-chunks.sh` carries it out of
+Docker as gzip pieces (about 2.3 GB) with the checksum of each, which
+`flash-root.sh` writes as they are.
 
 `backup.sh` saves EFS, the modem's partitions, persist, BOOT and the rest to
 `stock/starqltechn/` (keep a copy of it). `flash-root.sh` writes USERDATA in
@@ -72,7 +77,8 @@ The first start takes a minute while the system grows to fill the storage.
 - **USB serial:** a login on the phone's USB serial port: a COM port on
   Windows, `/dev/ttyACM0` on Linux (115200 baud).
 - **USB network:** `ssh <you>@172.16.42.1` (the computer gets 172.16.42.2).
-  Linux and macOS have the NCM driver it needs; Windows 10 does not.
+  The phone's USB network is RNDIS, not the other ztOS phones' NCM: Windows
+  binds its own driver to it with no setup, and Linux and macOS take it too.
 - **TWRP** is always one button combination away: power off (or hold Volume
   Down + Power), then Volume Up + Bixby + Power.
 

@@ -1,0 +1,9 @@
+# The sensor DSP (SLPI) of the Galaxy S9 (Snapdragon): once it is up, the
+# file server it boots its sensors from, and iio-sensor-proxy for all of
+# them. 80-iio-sensor-proxy.rules asks only for the light sensor and the
+# compass of a fastrpc DSP; this phone's SLPI also has its accelerometer
+# (LSM6DSM) and proximity sensor (TMD4906).
+ACTION=="remove", GOTO="ztos_starq_sensors_end"
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hexagonrpcd-sdsp.service"
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity"
+LABEL="ztos_starq_sensors_end"
