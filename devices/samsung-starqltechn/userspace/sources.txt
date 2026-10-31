@@ -1,0 +1,11 @@
+# The Qualcomm userspace this phone's modem, DSPs and call audio need, none of
+# it packaged by Arch Linux ARM. Versions and checksums are Alpine's
+# (community/<name>/APKBUILD, as postmarketOS installs them on this phone).
+# name  url  sha512
+qrtr-v1.2.tar.gz https://github.com/linux-msm/qrtr/archive/v1.2/qrtr-v1.2.tar.gz aec1dfc598a70f0128d81a56faab74a2a7676dc0c4ff2e858f76aaf815afb5b785af0cf18427212f92aec3c61297af3f94a64671ec5e161c4a340d2edcfaabdd
+rmtfs-v1.3.tar.gz https://github.com/linux-msm/rmtfs/archive/v1.3/rmtfs-v1.3.tar.gz 0cd4dfe00e9a679563a631d8f28f7336c79b016e0c15f1bf20529243944b86b31a01a82a0ddb244d13aafbf04fc31ea9d82d8055d49d843cfba0739f7a802e95
+tqftpserv-v1.3.tar.gz https://github.com/linux-msm/tqftpserv/archive/v1.3/tqftpserv-v1.3.tar.gz 1e43ef53633baf8b06132dc84bf8274ab9cf96c7d5c4c99b31d908f03ed6e90fc1a67ade76220ef2ed87eac8be50f5ac2de554ec3a604f026054ba6609364a74
+hexagonrpcd-0.4.0.tar.gz https://github.com/linux-msm/hexagonrpc/archive/refs/tags/v0.4.0.tar.gz 18ebe4beeed97018243bec5043b8395c07c76f1174085e41a32648fd481485076fefffa091700ca1f72163687405456e5537aa538bc4f08fecacb3f83e3a82d8
+msm-modem-13.tar.gz https://gitlab.postmarketos.org/postmarketOS/msm-modem/-/archive/13/msm-modem-13.tar.gz f293d63f3e770618d6c5218b41e2c97d6446cdb745e0b531c816a0d1513486ac29106bbad8d027e5949bb9d4e1b4b27d14572b48c23967e2a0f0bcb24244e0bc
+q6voiced-0.3.1.tar.gz https://gitlab.postmarketos.org/postmarketOS/q6voiced/-/archive/0.3.1/q6voiced-0.3.1.tar.gz ab41adb9724747054b660794df7bcb73afb55f5ce086a5b3f9b1c8107048a7febb54a6e3415a47f01d2b715f9012a9508ca17a9f84b72061503d214b01b1bbb0
+81voltd-v1.2.0.tar.gz https://gitlab.postmarketos.org/modem/81voltd/-/archive/v1.2.0/81voltd-v1.2.0.tar.gz 23927aae6a0e4585a7f31589fe033a0fbe2dc65f820206d3e9427ee5d5b0cc7e8dea7d1240c50a1f3b6fe8b78da58a28dace779293c31cea613e5cf1499377fe

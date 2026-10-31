@@ -1,0 +1,251 @@
+#!/bin/sh
+# zboot: boot stage for the Galaxy S9 (Snapdragon: SCV38, SM-G9600;
+# starqltechn) on a mainline kernel. The Exynos S9's (initramfs/init), with
+# this phone's names; its drivers for the screen, the touchscreen, UFS and
+# the USB gadget are built into the kernel, so nothing is loaded here.
+#
+# Kernel command line (devices/samsung-starqltechn/boot/build-boot.sh --cmdline):
+#   zboot.rescue=1     do not boot anything, stay in the rescue shell
+#   zboot.deadman=N    reset the phone N seconds after boot unless
+#                      /run/zboot.hold exists (default 0 = never). Here a reset
+#                      comes back to this same boot image, not to TWRP, so it
+#                      is for unattended tests only; TWRP is always one button
+#                      combination away (Volume Up + Bixby + Power).
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+/bin/busybox --install -s /bin 2>/dev/null
+mkdir -p /proc /sys /dev /run /tmp /newroot
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mount -t tmpfs -o mode=755 tmpfs /run
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts 2>/dev/null
+
+echo 1 > /proc/sys/kernel/sysrq
+
+LOG=/run/zboot.log
+log() {
+	echo "zboot| $*" > /dev/kmsg 2>/dev/null
+	echo "$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOG"
+}
+
+arg() {
+	sed -n "s/.*\b$1=\([^ ]*\).*/\1/p" /proc/cmdline
+}
+
+log "===== zboot on $(uname -r), $(cat /proc/device-tree/model 2>/dev/null) ====="
+log "cpus online: $(cat /sys/devices/system/cpu/online)  mem: $(awk '/MemTotal/{printf "%d MB", $2/1024}' /proc/meminfo)"
+
+# --- deadman ------------------------------------------------------------------
+# The subshell survives switch_root; the moved procfs is then reachable under
+# /newroot from its point of view.
+DEADMAN=$(arg zboot.deadman)
+DEADMAN=${DEADMAN:-0}
+EARLY_DEADMAN=
+if [ "$DEADMAN" -gt 0 ] 2>/dev/null; then
+	log "deadman: reset in $DEADMAN s unless /run/zboot.hold exists"
+	# One sleep per deadman, and nothing but shell builtins afterwards: once
+	# switch_root has replaced this root, /bin/sleep is gone and any applet
+	# would have to be exec'd from a filesystem that no longer exists.
+	(
+		sleep "$DEADMAN"
+		[ -e /run/zboot.hold ] && exit 0
+		echo "zboot| deadman fired in the boot stage" > /dev/kmsg 2>/dev/null
+		echo b > /proc/sysrq-trigger 2>/dev/null
+	) &
+	EARLY_DEADMAN=$!
+fi
+
+# The same timer for the system we hand over to. It runs with its working
+# directory inside the root being switched to, so its relative paths follow
+# that directory when it becomes "/" and keep working after the handover.
+late_deadman() {
+	[ -n "$EARLY_DEADMAN" ] || return 0
+	kill "$EARLY_DEADMAN" 2>/dev/null
+	(
+		cd /newroot || exit 0
+		sleep "$DEADMAN"
+		[ -e run/zboot.hold ] && exit 0
+		echo "zboot| deadman fired after handover" > dev/kmsg 2>/dev/null
+		echo b > proc/sysrq-trigger 2>/dev/null
+	) &
+	log "deadman re-armed for the new root: touch /run/zboot.hold within $DEADMAN s"
+}
+
+# --- USB: NCM network + ACM serial, telnet on 172.16.42.1 ----------------------
+# Each call does what is still missing (the gadget, its binding, the
+# network), so a controller that appears late is picked up by calling it
+# again; returns 0 once the gadget is bound and serving.
+usb_up() {
+	mount -t configfs none /sys/kernel/config 2>/dev/null
+	g=/sys/kernel/config/usb_gadget/zboot
+	[ -n "$(cat "$g/UDC" 2>/dev/null)" ] && [ -e /run/zboot.usb ] && return 0
+	i=0
+	while [ -z "$(ls /sys/class/udc 2>/dev/null)" ] && [ "$i" -lt 40 ]; do
+		i=$((i + 1))
+		sleep 0.25
+	done
+	udc=$(ls /sys/class/udc 2>/dev/null | head -n1)
+	if [ -z "$udc" ]; then
+		log "usb: no UDC"
+		return 1
+	fi
+	if [ ! -d "$g/functions/acm.GS0" ]; then
+		mkdir -p "$g" || return 1
+		echo 0x1d6b > "$g/idVendor"
+		echo 0x0104 > "$g/idProduct"
+		mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409"
+		echo "zboot" > "$g/strings/0x409/manufacturer"
+		echo "Galaxy S9 (Snapdragon) zboot rescue" > "$g/strings/0x409/product"
+		echo "starqltechn" > "$g/strings/0x409/serialnumber"
+		echo "ncm+acm" > "$g/configs/c.1/strings/0x409/configuration"
+		mkdir -p "$g/functions/ncm.usb0" "$g/functions/acm.GS0"
+		echo 02:5a:42:00:00:01 > "$g/functions/ncm.usb0/dev_addr"
+		echo 02:5a:42:00:00:02 > "$g/functions/ncm.usb0/host_addr"
+		ln -s "$g/functions/ncm.usb0" "$g/configs/c.1/"
+		ln -s "$g/functions/acm.GS0" "$g/configs/c.1/"
+	fi
+	if [ -z "$(cat "$g/UDC" 2>/dev/null)" ]; then
+		echo "$udc" > "$g/UDC" || { log "usb: binding $udc failed"; return 1; }
+	fi
+	touch /run/zboot.usb
+	ifconfig lo 127.0.0.1 up
+	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up
+	# no router and no DNS option: the host must not route anything this way
+	mkdir -p /var/lib/misc /etc
+	: > /var/lib/misc/udhcpd.leases
+	cat > /etc/udhcpd.conf <<-EOF
+		start 172.16.42.2
+		end 172.16.42.2
+		interface usb0
+		max_leases 1
+		option subnet 255.255.255.0
+		option lease 3600
+	EOF
+	udhcpd /etc/udhcpd.conf
+	telnetd -l /bin/sh -p 23
+	log "usb: $udc bound, telnet on 172.16.42.1"
+}
+
+# A partition's device by its GPT name (no udev here: sysfs has it)
+part_dev() {
+	for u in /sys/class/block/*/uevent; do
+		grep -qx "PARTNAME=$1" "$u" 2>/dev/null && { sed -n 's/^DEVNAME=//p' "$u"; return 0; }
+	done
+	return 1
+}
+
+# What the rescue shell knows, kept where TWRP can read it: CACHE, Android's
+# own scratch partition (ext4; ztOS never uses it otherwise). The last ten are
+# kept as ztos-boot/rescue-N.txt; rescue-last.txt is the newest.
+save_log() {
+	dev=$(part_dev cache) || return 0
+	mkdir -p /mnt/cache
+	mount -t ext4 -o rw,noatime,nodev,nosuid,noexec "/dev/$dev" /mnt/cache 2>/dev/null || return 0
+	d=/mnt/cache/ztos-boot
+	mkdir -p "$d"
+	n=$(cat "$d/count" 2>/dev/null || echo 0); n=$(( (n + 1) % 10 ))
+	echo "$n" > "$d/count"
+	{
+		echo "== zboot log ($*)"; cat "$LOG"
+		echo "== cmdline"; cat /proc/cmdline
+		echo "== udc"; ls -l /sys/class/udc 2>&1
+		echo "== gadget"; ls /sys/kernel/config/usb_gadget/zboot 2>&1; cat /sys/kernel/config/usb_gadget/zboot/UDC 2>&1
+		for s in /sys/class/udc/*; do [ -e "$s/state" ] && echo "$s state: $(cat "$s/state")"; done
+		echo "== net"; ip addr 2>&1
+		echo "== block"; ls /sys/class/block 2>&1 | tr '\n' ' '; echo
+		echo "== dmesg"; dmesg
+	} > "$d/rescue-$n.txt" 2>&1
+	cp "$d/rescue-$n.txt" "$d/rescue-last.txt"
+	sync
+	umount /mnt/cache
+	log "rescue log saved to CACHE (ztos-boot/rescue-$n.txt)"
+}
+
+rescue() {
+	log "rescue shell: $*"
+	touch /run/zboot.hold 2>/dev/null
+	usb_up
+	# the USB controller may come up after usb_up stopped waiting for it:
+	# keep trying until the gadget is bound, then save the log again
+	(
+		until [ -n "$(cat /sys/kernel/config/usb_gadget/zboot/UDC 2>/dev/null)" ]; do
+			sleep 2
+			usb_up
+		done
+		save_log "after USB came up"
+	) &
+	save_log "$*"
+	cp "$LOG" /run/zboot.rescue 2>/dev/null
+	dmesg > /run/zboot.dmesg 2>/dev/null
+	# the same on the screen, for a photo
+	{
+		echo
+		echo "=== ztOS boot stage: rescue shell ($*) ==="
+		tail -n 8 "$LOG"
+		echo "UDC: $(ls /sys/class/udc 2>/dev/null)  usb0: $(ip -4 addr show usb0 2>/dev/null | sed -n 's/.*inet \([^ ]*\).*/\1/p')"
+		echo "TWRP: hold Volume Up + Bixby + Power"
+		echo
+	} > /dev/tty0 2>/dev/null
+	# the ACM serial port too: a COM port on a Windows host, which may have no
+	# NCM network driver
+	(
+		while :; do
+			[ -c /dev/ttyGS0 ] && setsid sh -c 'exec sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1'
+			sleep 1
+		done
+	) &
+	while :; do
+		setsid sh -c 'exec sh -i </dev/tty0 >/dev/tty0 2>&1'
+		sleep 1
+	done
+}
+
+# Bring USB up before anything that may fail: it is the way in.
+usb_up
+
+[ "$(arg zboot.rescue)" = 1 ] && rescue "requested on the command line"
+
+# --- find and boot the Arch root ----------------------------------------------
+# USERDATA (sda28 on this phone) holds it; the UFS LUNs take a moment.
+i=0
+ROOTDEV=
+while [ "$i" -lt 40 ]; do
+	ROOTDEV=$(findfs LABEL=ZR_ARCH 2>/dev/null) && [ -n "$ROOTDEV" ] && break
+	i=$((i + 1))
+	sleep 0.25
+done
+log "block devices after $i tries: $(echo $(ls /sys/class/block 2>/dev/null | grep -v '^ram\|^loop' | tr '\n' ' '))"
+[ -n "$ROOTDEV" ] || rescue "no filesystem labelled ZR_ARCH"
+
+log "ZR_ARCH is $ROOTDEV"
+mount -t ext4 -o ro "$ROOTDEV" /newroot || rescue "mount of $ROOTDEV failed"
+[ -x /newroot/sbin/init ] || [ -L /newroot/sbin/init ] || {
+	umount /newroot
+	rescue "no /sbin/init on ZR_ARCH"
+}
+
+# The gadget goes with the initramfs: the root system builds its own.
+if [ -d /sys/kernel/config/usb_gadget/zboot ]; then
+	killall telnetd udhcpd 2>/dev/null
+	g=/sys/kernel/config/usb_gadget/zboot
+	echo "" > "$g/UDC" 2>/dev/null
+	rm -f "$g/configs/c.1/ncm.usb0" "$g/configs/c.1/acm.GS0"
+	rmdir "$g/configs/c.1/strings/0x409" "$g/configs/c.1" \
+		"$g/functions/ncm.usb0" "$g/functions/acm.GS0" \
+		"$g/strings/0x409" "$g" 2>/dev/null
+fi
+rm -f /run/zboot.usb
+
+log "switch_root to $ROOTDEV"
+dmesg > /run/zboot.dmesg 2>/dev/null
+late_deadman
+mount --move /proc /newroot/proc
+mount --move /sys /newroot/sys
+mount --move /dev /newroot/dev
+mount --move /run /newroot/run
+exec switch_root /newroot /sbin/init
+
+echo "zboot| switch_root failed" > /dev/kmsg
+exec sh -i </dev/console >/dev/console 2>&1
