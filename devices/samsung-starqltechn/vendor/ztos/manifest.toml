@@ -1,0 +1,46 @@
+# ztOSIAL manifest: Samsung Galaxy S9 (Snapdragon: SCV38, SM-G9600;
+# starqltechn), Snapdragon 845. Mainline Linux covers this phone's hardware,
+# so every interface is served by its generic backend; this file only names
+# the nodes where guessing could be wrong. See design/ztOSIAL.md.
+
+[device]
+codename = "samsung-starqltechn"
+name = "Samsung Galaxy S9 (Snapdragon)"
+form_factor = "phone"
+scale = 2.5
+
+[gsi]
+min = "0.2.0"
+
+[ial.Perf1]
+backend = "generic"
+# Adreno 630 (msm's devfreq); thermal from the kernel's thermal zones
+gpu_devfreq = "/sys/class/devfreq/5000000.gpu"
+thermal_unit = "millicelsius"
+thermal_marks = [70, 76, 82]
+# Kryo 385: no hotplug driver is needed, and none of ztOS's Exynos ones apply
+keep_online = [0]
+hotplug = false
+
+[ial.Display1]
+backend = "generic"
+# The S6E3HA8's AOR dimming (kernel/patch-panel-backlight.py), named as on the
+# Exynos S9 and driven the same way: four AOR bands, the rest on the GPU
+node = "/sys/class/backlight/s9p-panel"
+mode = "aor"
+
+[ial.Sensors1]
+# light, proximity and motion are on the sensor DSP, through iio-sensor-proxy
+backend = "vendor"
+module = "/vendor/ztos/ial/starqltechn.py"
+
+[ial.Android1]
+backend = "generic"
+
+[android]
+binder = "binderfs"
+gralloc = "gbm"
+memory_budget_mb = 1600
+
+[boot]
+usb_gadget_udc = "a600000.usb"

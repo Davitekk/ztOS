@@ -1,0 +1,18 @@
+# The sensor DSP (SLPI) asks its host for files over FastRPC: its libraries,
+# the sensor configuration and this phone's calibration, as
+# ztos-starq-firmware laid them out.
+[Unit]
+Description=FastRPC file server for the sensor DSP (SLPI)
+After=ztos-starq-firmware.service
+Requires=ztos-starq-firmware.service
+ConditionPathExists=/dev/fastrpc-sdsp
+
+[Service]
+ExecStart=/usr/bin/hexagonrpcd -f /dev/fastrpc-sdsp -d sdsp -s -R /run/ztos-firmware/hexagonrpc
+Restart=always
+RestartSec=3
+User=fastrpc
+Group=fastrpc
+
+[Install]
+WantedBy=multi-user.target

@@ -66,11 +66,15 @@ docker run --rm -i --privileged -v "$VOLUME:/build" -v "$host_root:/host:ro" "$I
 			rm -f "/build/ztOS/$path"; ln -s "$target" "/build/ztOS/$path" ;;
 		esac
 	done
-	chown -R builder: /build /build/ztOS'
+'
 
-# unshare with --map-auto needs real privileges in this container; the
-# installer itself runs as the ordinary user it expects
+# As root in the container: the installer then builds in a plain mount
+# namespace (unshare --mount), as it does for root on any host. As an
+# ordinary user it would map IDs with newuidmap, whose file capabilities do
+# not survive Docker's storage.
 tty=
 [ -t 0 ] && [ -t 1 ] && tty=-t
-docker run --rm -i $tty --privileged -v "$VOLUME:/build" -w /build/ztOS \
-	-e USER=builder "$IMAGE" sudo -E -u builder -- "$@"
+# (binfmt_misc is mounted per container: the installer checks for qemu-aarch64 there)
+docker run --rm -i $tty --privileged -v "$VOLUME:/build" -w /build/ztOS "$IMAGE" sh -c '
+	mountpoint -q /proc/sys/fs/binfmt_misc || mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
+	exec "$@"' sh "$@"

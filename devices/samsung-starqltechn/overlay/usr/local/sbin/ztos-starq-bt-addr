@@ -1,0 +1,18 @@
+#!/bin/sh
+# The Bluetooth controller's own address, from EFS (ztos-starq-firmware read
+# it): a BCM4361 starts with a placeholder address until the host sets one.
+addr=$(cat /run/ztos-firmware/bt-addr 2>/dev/null) || exit 0
+[ -n "$addr" ] || exit 0
+i=0
+until btmgmt --index 0 info > /dev/null 2>&1; do
+	i=$((i + 1))
+	[ "$i" -lt 30 ] || { echo "ztos-starq-bt-addr: no controller" >&2; exit 0; }
+	sleep 1
+done
+current=$(btmgmt --index 0 info | sed -n 's/^.*addr \([0-9A-Fa-f:]\{17\}\).*$/\1/p' | head -n1)
+if [ "$(echo "$current" | tr a-f A-F)" = "$(echo "$addr" | tr a-f A-F)" ]; then
+	exit 0
+fi
+btmgmt --index 0 power off > /dev/null
+btmgmt --index 0 public-addr "$addr"
+btmgmt --index 0 power on > /dev/null

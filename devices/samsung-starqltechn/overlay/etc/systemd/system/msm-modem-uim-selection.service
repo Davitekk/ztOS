@@ -1,0 +1,16 @@
+# msm-modem (postmarketOS): picks the SIM card's application once the modem
+# is up, before ModemManager takes it.
+[Unit]
+Description=Modem SIM application selection
+After=rmtfs.service
+Requires=rmtfs.service
+Before=ModemManager.service
+
+[Service]
+Type=notify
+ExecStart=/usr/lib/msm-modem-uim-selection
+NotifyAccess=all
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

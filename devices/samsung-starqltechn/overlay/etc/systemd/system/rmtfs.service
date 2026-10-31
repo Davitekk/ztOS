@@ -1,0 +1,15 @@
+# The modem's remote file system: its EFS copies (modemst1, modemst2, fsg,
+# fsc) served from their partitions, read-only (-r): what the modem writes
+# stays in memory, so the IMEI and its calibration are never touched.
+[Unit]
+Description=Qualcomm remote file system service (read-only)
+After=ztos-starq-firmware.service
+Before=ModemManager.service NetworkManager.service
+
+[Service]
+ExecStart=/usr/bin/rmtfs -r -P -s
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

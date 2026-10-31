@@ -1,0 +1,124 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# The Galaxy S9 (Snapdragon)'s firmware, from its own partitions: the blobs
+# its bootloader verified for this phone, never copies of another's. After
+# postmarketOS's msm-firmware-loader (MIT), for this phone only.
+#
+# Mounted read-only (ext4 with noload: not even a journal replay writes),
+# under /run/ztos-firmware/mnt:
+#   APNHLOS (vfat)  image/: a630_zap, slpi, cdsp, ipa_fws, venus
+#   MODEM   (vfat)  image/: mba, modem, adsp
+#   DSP     (ext4)  the FastRPC libraries of adsp, cdsp, sdsp
+#   VENDOR  (ext4)  etc/wifi (BCM4361 firmware, CLM, nvram), firmware/ (BT
+#                   patch), etc/sensors
+#   PERSIST (ext4)  sensors/registry/registry: this phone's sensor calibration
+# EFS (ext4) only for the Wi-Fi and Bluetooth addresses, then unmounted.
+#
+# Made in /run/ztos-firmware:
+#   target/         every blob, as the kernel asks for it (firmware_class.path)
+#   hexagonrpc/     what hexagonrpcd serves the sensor DSP (-R)
+#   wifi-mac, bt-addr
+#
+# Runs before udev starts loading the drivers that ask for firmware
+# (ztos-starq-firmware.service). Never writes to any partition.
+set -u
+B=/run/ztos-firmware
+T=$B/target
+H=$B/hexagonrpc
+NVRAM=${ZTOS_WIFI_NVRAM:-nvram.txt_murata_r041_b2}
+[ -r /etc/ztos/wifi-nvram ] && NVRAM=$(cat /etc/ztos/wifi-nvram)
+
+mkdir -p "$B"
+mountpoint -q "$B" || mount -t tmpfs -o mode=755,nodev,noexec,nosuid tmpfs "$B"
+mkdir -p "$B/mnt" "$T" "$H"
+
+# a partition's device by its GPT name (udev is not running yet)
+part() {
+	for u in /sys/class/block/*/uevent; do
+		grep -qx "PARTNAME=$1" "$u" 2>/dev/null && { echo "/dev/$(sed -n 's/^DEVNAME=//p' "$u")"; return 0; }
+	done
+	return 1
+}
+
+ro_mount() {    # <partition> <fstype> [mount point]
+	at=${3:-$B/mnt/$1}
+	dev=$(part "$1") || { echo "ztos-starq-firmware: no $1 partition" >&2; return 1; }
+	mkdir -p "$at"
+	mountpoint -q "$at" && return 0
+	case $2 in
+	vfat) opts=ro,nodev,noexec,nosuid,fmask=0222,dmask=0022 ;;
+	ext4) opts=ro,noload,nodev,noexec,nosuid ;;
+	esac
+	mount -t "$2" -o "$opts" "$dev" "$at" || { echo "ztos-starq-firmware: mounting $1 failed" >&2; return 1; }
+}
+
+ro_mount apnhlos vfat
+ro_mount modem vfat
+ro_mount dsp ext4
+ro_mount vendor ext4
+ro_mount persist ext4
+
+link() {        # <existing> <link>: only what is there, and never twice
+	[ -e "$1" ] || return 0
+	[ -e "$2" ] || [ -L "$2" ] && return 0
+	mkdir -p "$(dirname "$2")"
+	ln -s "$1" "$2"
+}
+
+# --- remote processors, the GPU's zap shader, IPA ---------------------------------
+# All of a blob's pieces (.mdt and .bNN) from the partition that has it first.
+for blob in "$B"/mnt/apnhlos/image/* "$B"/mnt/modem/image/* "$B"/mnt/vendor/firmware/ipa_fws.*; do
+	[ -f "$blob" ] || continue
+	link "$blob" "$T/$(basename "$blob")"
+done
+# the device tree names them .mbn; the kernel takes a split .mdt by that name
+for mdt in "$T"/*.mdt; do
+	[ -e "$mdt" ] && link "$mdt" "${mdt%.mdt}.mbn"
+done
+# and under its own prefix, qcom/sdm845/Samsung/starqltechn/<name>.mbn
+link "$T" "$T/qcom/sdm845/Samsung/starqltechn"
+
+# --- the phone's identity, read from EFS and nothing else -------------------------
+if ro_mount efs ext4 "$B/efs"; then
+	mac=$(tr -d ' \n\r' < "$B/efs/wifi/.mac.info" 2>/dev/null)
+	bt=$(tr -d ' \n\r' < "$B/efs/bluetooth/bt_addr" 2>/dev/null)
+	umount "$B/efs" && rmdir "$B/efs"
+	echo "$mac" | grep -Eqi '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' && echo "$mac" > "$B/wifi-mac"
+	echo "$bt" | grep -Eqi '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' && echo "$bt" > "$B/bt-addr"
+fi
+
+# --- Wi-Fi: BCM4361 B2, Murata 1QW module (brcmfmac) ------------------------------
+W=$B/mnt/vendor/etc/wifi
+link "$W/bcmdhd_sta.bin_b2" "$T/brcm/brcmfmac4361-pcie.bin"
+link "$W/bcmdhd_clm.blob" "$T/brcm/brcmfmac4361-pcie.clm_blob"
+if [ -f "$W/$NVRAM" ]; then
+	# the calibration with the phone's own address in it
+	{
+		grep -v '^macaddr=' "$W/$NVRAM"
+		[ -s "$B/wifi-mac" ] && echo "macaddr=$(cat "$B/wifi-mac")"
+	} > "$B/brcmfmac4361-pcie.txt"
+	link "$B/brcmfmac4361-pcie.txt" "$T/brcm/brcmfmac4361-pcie.samsung,starqltechn.txt"
+	link "$B/brcmfmac4361-pcie.txt" "$T/brcm/brcmfmac4361-pcie.txt"
+else
+	echo "ztos-starq-firmware: no $NVRAM in VENDOR's etc/wifi" >&2
+fi
+
+# --- Bluetooth: the same chip's patch file (btbcm) --------------------------------
+for name in BCM.samsung,starqltechn BCM4361B2.samsung,starqltechn BCM4361B2; do
+	link "$B/mnt/vendor/firmware/bcm4361B2_murata.hcd" "$T/brcm/$name.hcd"
+done
+
+# --- what hexagonrpcd serves the sensor DSP ---------------------------------------
+link "$B/mnt/dsp" "$H/dsp"
+link "$B/mnt/vendor/etc/sensors/config" "$H/sensors/config"
+link "$B/mnt/vendor/etc/sensors/sns_reg_config" "$H/sensors/sns_reg.conf"
+link /sys/devices/soc0 "$H/socinfo"
+mkdir -p "$H/acdb"
+# the calibration registry is copied, so nothing the DSP does can reach PERSIST
+if [ -d "$B/mnt/persist/sensors/registry/registry" ] && [ ! -e "$H/sensors/registry" ]; then
+	cp -a "$B/mnt/persist/sensors/registry/registry" "$H/sensors/registry"
+	id fastrpc > /dev/null 2>&1 && chown -R fastrpc:fastrpc "$H/sensors/registry"
+fi
+
+printf '%s' "$T" > /sys/module/firmware_class/parameters/path
+echo "ztos-starq-firmware: $(ls "$T" | wc -l) blobs; wifi mac $(cat "$B/wifi-mac" 2>/dev/null || echo none); bt $(cat "$B/bt-addr" 2>/dev/null || echo none)"

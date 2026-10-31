@@ -1,0 +1,15 @@
+[Unit]
+Description=Galaxy S9 (Snapdragon): firmware from the phone's own partitions
+Documentation=file:///usr/local/sbin/ztos-starq-firmware
+DefaultDependencies=no
+After=systemd-sysusers.service
+Before=systemd-udevd.service systemd-udev-trigger.service sysinit.target
+RequiresMountsFor=/run
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ztos-starq-firmware
+
+[Install]
+WantedBy=sysinit.target

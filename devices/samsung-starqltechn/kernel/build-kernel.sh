@@ -45,6 +45,7 @@ tar -xzf "$TARBALL" -C "$SRC" --strip-components=1
 python3 "$HERE/patch-brcmfmac-4361.py" "$SRC"
 python3 "$HERE/patch-btbcm.py" "$SRC"
 python3 "$HERE/patch-muic.py" "$SRC"
+python3 "$HERE/patch-panel-backlight.py" "$SRC"
 python3 "$HERE/patch-dts.py" "$SRC"
 
 mkdir -p "$OUT"

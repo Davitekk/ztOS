@@ -1,0 +1,32 @@
+# ztOS on the Galaxy S9 (Snapdragon: SCV38, SM-G9600; starqltechn). The kernel
+# is ztOS's own boot image, not a package (kernel/build-kernel.sh); the
+# phone's firmware comes from its own partitions (ztos-starq-firmware).
+
+# the boot stage's busybox (boot/build-boot.sh takes it from this root)
+busybox
+
+# the GPU's microcode (qcom/a630_sqe.fw, a630_gmu.bin); its zap shader is the
+# phone's own
+linux-firmware-qcom
+
+# sound: ALSA's UCM, to which the layer adds this phone's profile
+alsa-ucm-conf
+
+# the modem over QRTR (ModemManager, qmicli for msm-modem-uim-selection)
+modemmanager
+libqmi
+
+# Bluetooth controller, management and scan tools
+bluez
+bluez-utils
+
+# the sensors on the sensor DSP, through libssc
+iio-sensor-proxy
+
+# looking at the hardware
+i2c-tools
+pciutils
+usbutils
+
+# building the Qualcomm userspace in this root (userspace/build.sh)
+meson

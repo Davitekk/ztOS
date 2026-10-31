@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Where ztOS goes: the QEMU emulator, or a Galaxy S9 (starlte)."""
+"""Where ztOS goes: the QEMU emulator, a Galaxy S9 (starlte) or a Galaxy S9 with
+Snapdragon (starqltechn: SCV38, SM-G9600)."""
 from __future__ import annotations
 
 import os
@@ -12,6 +13,9 @@ from pathlib import Path
 
 from .build import EDK2, ROOT, WORK, Fail, say
 
+
+NAMES = {"qemu": "the emulator", "starlte": "the Galaxy S9",
+         "starqltechn": "the Galaxy S9 (Snapdragon)"}
 
 MANUAL_REBOOT = """To reboot the phone:
   - hold Power and Volume+, Volume- keys to reboot."""
@@ -222,3 +226,88 @@ def install_phone(root_image: Path, ask) -> None:
     say("")
     say("Hold Power and Volume+, Volume- keys to reboot.")
     say("done: ztOS starts on the phone (the first start takes a minute)")
+
+
+# --- the Galaxy S9, Snapdragon (starqltechn) ----------------------------------------
+
+STARQ = ROOT / "devices" / "samsung-starqltechn"
+
+STARQ_GUIDE = """
+Installing ztOS on a Samsung Galaxy S9, Snapdragon (SCV38, SM-G9600: "starqltechn")
+====================================================================================
+
+ztOS replaces Android on the phone's internal storage. Everything on the
+phone's user data partition is ERASED. The phone's identity (IMEI, modem
+calibration, Wi-Fi and Bluetooth addresses: EFS, modemst1/2, fsg, fsc) and its
+sensor calibration (persist) are never written, and are saved first anyway.
+Only BOOT and USERDATA are written; Android's other partitions stay, because
+ztOS loads the phone's own firmware from them.
+
+You need
+  - The bootloader unlocked (Settings > Developer options > OEM unlocking) and
+    the official TWRP for starqltechn (twrp.me, 3.7.0) in RECOVERY, flashed
+    with Odin from download mode: Volume Down + Bixby, then plug in the cable.
+  - adb on this computer (android-tools) and a USB cable.
+  - The phone charged above 50 %.
+
+Steps (the installer does 3 to 6 for you, and asks before each)
+  1. Back up anything on the phone you want to keep. It will be gone.
+  2. Start TWRP: power the phone off, then hold Volume Up + Bixby + Power
+     until the TWRP screen. Plug it into this computer.
+  3. EFS, the modem's partitions, persist, BOOT and the rest that cannot be
+     had back are saved to stock/starqltechn/, each checked (once).
+  4. The system is written to USERDATA from TWRP in 256 MiB pieces, each
+     checked; a cut cable just means running it again: it carries on.
+  5. ztOS's boot image is written to BOOT, and read back to check it.
+  6. Reboot. The first start takes a minute: the system grows to fill the
+     storage, then the Welcome app shows how ztOS is used.
+
+If the phone does not start ztOS, Volume Up + Bixby + Power always brings
+TWRP back. To go back to Android: write stock/starqltechn/boot.img to BOOT
+(devices/samsung-starqltechn/scripts/flash.sh BOOT stock/starqltechn/boot.img)
+and flash Samsung's firmware with Odin.
+
+On Windows the build runs in Docker and the phone is written from Git Bash:
+devices/samsung-starqltechn/README.md says how.
+"""
+
+
+def guide(target: str) -> str:
+    return STARQ_GUIDE if target == "starqltechn" else PHONE_GUIDE
+
+
+def install(target: str, root_image: Path, ask) -> None:
+    if target == "starqltechn":
+        install_starqltechn(root_image, ask)
+    else:
+        install_phone(root_image, ask)
+
+
+def install_starqltechn(root_image: Path, ask) -> None:
+    """Steps 3 to 6 of STARQ_GUIDE, everything through TWRP, so installing
+    never depends on the new system's USB. Nothing is written to the phone
+    without a yes, and the erasing step wants the word typed out."""
+    state = adb_state()
+    if state != "recovery":
+        raise Fail(f"the phone is not in TWRP over adb (adb says: {state}). Start TWRP (Volume Up + Bixby + "
+                   "Power) and plug it in, then run this again.")
+    scripts = STARQ / "scripts"
+    say("saving what cannot be had back (EFS, modem, persist, BOOT...) to stock/starqltechn/")
+    subprocess.run(["bash", str(scripts / "backup.sh")], check=True)
+    boot = WORK / "starqltechn" / "stage" / "boot" / "ztos-starqltechn-boot.img"
+    if not boot.exists():
+        raise Fail(f"no boot image at {boot}: build ztOS for starqltechn first")
+    print("\nNext: the system goes into USERDATA. EVERYTHING ON THE PHONE'S USER DATA IS ERASED.")
+    if input("Type ERASE to go on: ").strip() != "ERASE":
+        raise Fail("stopped before writing anything")
+    subprocess.run(["bash", str(scripts / "flash-root.sh"), str(root_image)], check=True)
+    if not ask("Write ztOS's boot image to the phone's BOOT partition now?"):
+        raise Fail("stopped: the system is in USERDATA, BOOT is still Android's (which will not start "
+                   "without its data: write ztOS's boot image, or restore the stock firmware)")
+    subprocess.run(["bash", str(scripts / "flash.sh"), "BOOT", str(boot)], check=True)
+    if ask("Reboot the phone into ztOS now?"):
+        subprocess.run(["adb", "reboot"], check=False)
+    say("")
+    say("done: ztOS starts on the phone (the first start takes a minute).")
+    say("Its USB serial port has a login (/dev/ttyACM0 here); ssh to 172.16.42.1 where the computer has an "
+        "NCM driver.")
