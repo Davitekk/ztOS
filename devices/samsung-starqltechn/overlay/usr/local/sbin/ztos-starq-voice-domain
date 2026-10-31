@@ -69,6 +69,10 @@ def on_client(device, res):
     client = device.allocate_client_finish(res)
     message = Qmi.MessageNasSetSystemSelectionPreferenceInput.new()
     message.set_voice_domain_preference(Qmi.NasVoiceDomainPreference.CS_ONLY)
+    # and data-centric: a voice-centric phone without voice on LTE leaves LTE
+    # for 2G/3G (3GPP 24.301) and stayed on 2G after a call; data-centric it
+    # stays on LTE and calls still come and go through CSFB
+    message.set_usage_preference(Qmi.NasUsagePreference.DATA_CENTRIC)
     message.set_change_duration(Qmi.NasChangeDuration.POWER_CYCLE)
     client.set_system_selection_preference(message, 15, None, on_set, device)
 
@@ -77,7 +81,7 @@ def on_client(device, res):
 def on_set(client, res, device):
     client.set_system_selection_preference_finish(res).get_result()
     device.release_client(client, Qmi.DeviceReleaseClientFlags.RELEASE_CID, 10, None, None)
-    done('voice domain: CS only (calls over 2G/3G, not VoLTE)', 0)
+    done("voice domain: CS only (calls over 2G/3G, not VoLTE), data-centric", 0)
 
 
 Qrtr.Bus.new(5000, None, on_bus)
