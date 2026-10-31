@@ -74,6 +74,41 @@ late_deadman() {
 }
 
 # --- USB: NCM network + ACM serial, telnet on 172.16.42.1 ----------------------
+# The gadget: an RNDIS network (Windows has its driver built in, and binds it
+# from the Microsoft OS descriptors here; Linux and macOS have one too; NCM
+# would need a driver Windows 10 lacks) and an ACM serial port. The same as
+# the system's zboot-usb-gadget (this layer's overlay): same IDs, addresses.
+zboot_gadget() {        # <gadget dir> <product>
+	g=$1
+	mkdir -p "$g" || return 1
+	echo 0x1d6b > "$g/idVendor"
+	echo 0x0104 > "$g/idProduct"
+	# a new device release: Windows asks for the OS descriptors only once
+	# per vendor, product and release, and has already seen NCM's
+	echo 0x0510 > "$g/bcdDevice"
+	# composite with an interface association, as Windows wants for RNDIS+ACM
+	echo 0xef > "$g/bDeviceClass"
+	echo 0x02 > "$g/bDeviceSubClass"
+	echo 0x01 > "$g/bDeviceProtocol"
+	mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409"
+	echo "zboot" > "$g/strings/0x409/manufacturer"
+	echo "$2" > "$g/strings/0x409/product"
+	echo "starqltechn" > "$g/strings/0x409/serialnumber"
+	echo "rndis+acm" > "$g/configs/c.1/strings/0x409/configuration"
+	echo 1 > "$g/os_desc/use"
+	echo 0xcd > "$g/os_desc/b_vendor_code"
+	echo MSFT100 > "$g/os_desc/qw_sign"
+	mkdir -p "$g/functions/rndis.usb0" "$g/functions/acm.GS0"
+	echo 02:5a:42:00:00:01 > "$g/functions/rndis.usb0/dev_addr"
+	echo 02:5a:42:00:00:02 > "$g/functions/rndis.usb0/host_addr"
+	echo RNDIS > "$g/functions/rndis.usb0/os_desc/interface.rndis/compatible_id"
+	echo 5162001 > "$g/functions/rndis.usb0/os_desc/interface.rndis/sub_compatible_id"
+	# RNDIS first: Windows takes it as the device's first interface
+	ln -s "$g/functions/rndis.usb0" "$g/configs/c.1/"
+	ln -s "$g/functions/acm.GS0" "$g/configs/c.1/"
+	ln -s "$g/configs/c.1" "$g/os_desc/"
+}
+
 # Each call does what is still missing (the gadget, its binding, the
 # network), so a controller that appears late is picked up by calling it
 # again; returns 0 once the gadget is bound and serving.
@@ -92,19 +127,7 @@ usb_up() {
 		return 1
 	fi
 	if [ ! -d "$g/functions/acm.GS0" ]; then
-		mkdir -p "$g" || return 1
-		echo 0x1d6b > "$g/idVendor"
-		echo 0x0104 > "$g/idProduct"
-		mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409"
-		echo "zboot" > "$g/strings/0x409/manufacturer"
-		echo "Galaxy S9 (Snapdragon) zboot rescue" > "$g/strings/0x409/product"
-		echo "starqltechn" > "$g/strings/0x409/serialnumber"
-		echo "ncm+acm" > "$g/configs/c.1/strings/0x409/configuration"
-		mkdir -p "$g/functions/ncm.usb0" "$g/functions/acm.GS0"
-		echo 02:5a:42:00:00:01 > "$g/functions/ncm.usb0/dev_addr"
-		echo 02:5a:42:00:00:02 > "$g/functions/ncm.usb0/host_addr"
-		ln -s "$g/functions/ncm.usb0" "$g/configs/c.1/"
-		ln -s "$g/functions/acm.GS0" "$g/configs/c.1/"
+		zboot_gadget "$g" "Galaxy S9 (Snapdragon) zboot rescue" || return 1
 	fi
 	if [ -z "$(cat "$g/UDC" 2>/dev/null)" ]; then
 		echo "$udc" > "$g/UDC" || { log "usb: binding $udc failed"; return 1; }
@@ -231,9 +254,9 @@ if [ -d /sys/kernel/config/usb_gadget/zboot ]; then
 	killall telnetd udhcpd 2>/dev/null
 	g=/sys/kernel/config/usb_gadget/zboot
 	echo "" > "$g/UDC" 2>/dev/null
-	rm -f "$g/configs/c.1/ncm.usb0" "$g/configs/c.1/acm.GS0"
+	rm -f "$g/os_desc/c.1" "$g/configs/c.1/rndis.usb0" "$g/configs/c.1/acm.GS0"
 	rmdir "$g/configs/c.1/strings/0x409" "$g/configs/c.1" \
-		"$g/functions/ncm.usb0" "$g/functions/acm.GS0" \
+		"$g/functions/rndis.usb0" "$g/functions/acm.GS0" \
 		"$g/strings/0x409" "$g" 2>/dev/null
 fi
 rm -f /run/zboot.usb

@@ -72,14 +72,17 @@ static const u16 s6e3ha8_aor_table[S6E3HA8_BL_LEVELS] = {
 static int s6e3ha8_send_brightness(struct s6e3ha8 *priv, unsigned int level)
 {
 	struct mipi_dsi_multi_context ctx = { .dsi = priv->dsi };
+	u8 b1[3] = { 0xb1 };
 	u16 aor;
 
 	if (level >= S6E3HA8_BL_LEVELS)
 		level = S6E3HA8_BL_LEVELS - 1;
 	aor = s6e3ha8_aor_table[level];
+	b1[1] = aor >> 8;
+	b1[2] = aor & 0xff;
 
 	s6e3ha8_test_key_on_lvl2(&ctx);
-	mipi_dsi_dcs_write_seq_multi(&ctx, 0xb1, aor >> 8, aor & 0xff);
+	mipi_dsi_dcs_write_buffer_multi(&ctx, b1, sizeof(b1));
 	mipi_dsi_dcs_write_seq_multi(&ctx, 0xf7, 0x03);	/* latch on the next frame */
 	s6e3ha8_test_key_off_lvl2(&ctx);
 

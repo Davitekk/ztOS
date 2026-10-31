@@ -200,6 +200,13 @@ if MARK not in dts:
 
     dts = dts.rstrip("\n") + "\n" + NODES
 
+    # Bixby: upstream makes it Enter (postmarketOS's way to confirm before the
+    # system is up); on ztOS a stray press would type into the app in front.
+    # KEY_ASSISTANT is the key's own meaning, and nothing takes it by default.
+    old = '\t\t\tlabel = "Bixby";\n\t\t\tgpios = <&pm8998_gpios 19 GPIO_ACTIVE_LOW>;\n\t\t\tlinux,code = <KEY_ENTER>;\n'
+    assert dts.count(old) == 1, f"{DTS.name}: Bixby key anchor"
+    dts = dts.replace(old, old.replace("KEY_ENTER", "KEY_ASSISTANT"))
+
 if dts != orig:
     DTS.write_text(dts)
     print(f"{DTS.name}: Wi-Fi (PCIe0) and Bluetooth (UART6) added")
