@@ -50,9 +50,15 @@ python3 "$HERE/patch-dts.py" "$SRC"
 
 mkdir -p "$OUT"
 cp "$HERE/config-sdm845.aarch64" "$OUT/.config"
-M="make -C $SRC O=$OUT ARCH=arm64 LLVM=1 KBUILD_BUILD_USER=ztos KBUILD_BUILD_HOST=ztos"
+M=(make -C "$SRC" O="$OUT" ARCH=arm64 LLVM=1 KBUILD_BUILD_USER=ztos KBUILD_BUILD_HOST=ztos)
+# With ccache a rebuild takes minutes: the tree is unpacked afresh each time,
+# at the same path, so everything a patch did not touch is a cache hit.
+if command -v ccache > /dev/null; then
+	export CCACHE_DIR=$ROOT/build/ccache CCACHE_BASEDIR=$B CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime
+	M+=(CC="ccache clang" HOSTCC="ccache clang")
+fi
 "$SRC/scripts/kconfig/merge_config.sh" -m -O "$OUT" "$OUT/.config" "$HERE/ztos.config" > /dev/null
-$M olddefconfig > /dev/null
+"${M[@]}" olddefconfig > /dev/null
 
 # Every line of ztos.config must have survived olddefconfig: a "=y" that
 # Kconfig quietly made "=m" (a dependency still modular) would leave the
@@ -69,9 +75,9 @@ done < "$HERE/ztos.config"
 [ "$bad" = 0 ] || exit 1
 
 echo "kernel: building with $JOBS jobs"
-$M -j"$JOBS" Image.gz dtbs modules
+"${M[@]}" -j"$JOBS" Image.gz dtbs modules
 rm -rf "$OUT/modroot"
-$M INSTALL_MOD_PATH="$OUT/modroot" INSTALL_MOD_STRIP=1 modules_install > /dev/null
+"${M[@]}" INSTALL_MOD_PATH="$OUT/modroot" INSTALL_MOD_STRIP=1 modules_install > /dev/null
 KREL=$(cat "$OUT/include/config/kernel.release")
 rm -f "$OUT/modroot/lib/modules/$KREL/build" "$OUT/modroot/lib/modules/$KREL/source"
 echo "$KREL" > "$OUT/kernel.release"
