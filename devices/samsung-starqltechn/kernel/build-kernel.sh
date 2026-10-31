@@ -40,14 +40,28 @@ fi
 echo "kernel: unpacking $TAG"
 rm -rf "$SRC"
 mkdir -p "$SRC"
-tar -xzf "$TARBALL" -C "$SRC" --strip-components=1
+# --touch: every file dated now, not the tarball's date, so that make never
+# keeps an object built from a source a patch (or a bring-up switch) has since
+# left: an older date would look already built. ccache keeps the full
+# rebuild this means quick.
+tar -xzf "$TARBALL" -C "$SRC" --strip-components=1 --touch
 
 python3 "$HERE/patch-brcmfmac-4361.py" "$SRC"
 python3 "$HERE/patch-btbcm.py" "$SRC"
 python3 "$HERE/patch-muic.py" "$SRC"
 python3 "$HERE/patch-panel-backlight.py" "$SRC"
 python3 "$HERE/patch-max98512.py" "$SRC"
+python3 "$HERE/patch-wcd934x.py" "$SRC"
 python3 "$HERE/patch-dts.py" "$SRC"
+# Bring-up only, never for a release: ZTOS_REGMAP_WRITE=1 makes every regmap
+# debugfs "registers" file writable (echo "REG VALUE" > it), to try codec and
+# amplifier settings live
+if [ "${ZTOS_REGMAP_WRITE:-}" = 1 ]; then
+	sed -i 's/^#undef REGMAP_ALLOW_WRITE_DEBUGFS$/#define REGMAP_ALLOW_WRITE_DEBUGFS/' \
+		"$SRC/drivers/base/regmap/regmap-debugfs.c"
+	grep -q '^#define REGMAP_ALLOW_WRITE_DEBUGFS$' "$SRC/drivers/base/regmap/regmap-debugfs.c"
+	echo "kernel: regmap debugfs writable (bring-up build)"
+fi
 
 mkdir -p "$OUT"
 cp "$HERE/config-sdm845.aarch64" "$OUT/.config"
@@ -59,6 +73,11 @@ if command -v ccache > /dev/null; then
 	M+=(CC="ccache clang" HOSTCC="ccache clang")
 fi
 "$SRC/scripts/kconfig/merge_config.sh" -m -O "$OUT" "$OUT/.config" "$HERE/ztos.config" > /dev/null
+if [ "${ZTOS_REGMAP_WRITE:-}" = 1 ]; then
+	# (lockdown "integrity" refuses writable debugfs files)
+	sed -i -e '/^CONFIG_LOCK_DOWN_KERNEL_FORCE_/d' -e '/LOCK_DOWN_KERNEL_FORCE_NONE/d' "$OUT/.config"
+	echo "CONFIG_LOCK_DOWN_KERNEL_FORCE_NONE=y" >> "$OUT/.config"
+fi
 "${M[@]}" olddefconfig > /dev/null
 
 # Every line of ztos.config must have survived olddefconfig: a "=y" that

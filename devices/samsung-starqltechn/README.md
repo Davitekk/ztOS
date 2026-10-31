@@ -35,7 +35,7 @@ notes say what. **Untested**: written, not yet tried with real use.
 | Modem | SMS | Works | Sending and receiving tried |
 | Modem | Calls | Partial | Placing and receiving calls, earpiece and speakerphone, keypad tones; over 2G/3G (CSFB), as VoLTE needs Android's IMS stack. The other end hears nothing yet (microphones) |
 | Audio | Speaker | Works | WCD9340 and the MAX98512 pair, both speakers; media through PipeWire |
-| Audio | Microphones | Broken | Both digital mics read as an undriven line (noise or silence) whatever input is chosen; bias and clock as stock. Under investigation |
+| Audio | Microphones | Broken | The codec's decimators get only zeros from every digital-mic input, although bias (1.8 V), DMIC clock (2.4 MHz), input selectors and pin settings are as stock's; the analog side works. Under investigation |
 | Audio | Wired headphones | Untested | In the profile (UCM) |
 | Audio | Headset microphone | Broken | Its DSP port (SLIMBUS_1_TX) does not start; left out of the profile |
 | Sensors | Accelerometer, light, proximity | Works | On the sensor DSP (SLPI), through hexagonrpcd, libssc and iio-sensor-proxy |
