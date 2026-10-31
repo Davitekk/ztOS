@@ -15,6 +15,9 @@ alsa-ucm-conf
 # the modem over QRTR (ModemManager, qmicli for msm-modem-uim-selection)
 modemmanager
 libqmi
+# where a call is heard (the UCM Voice Call verb, earpiece or speaker), for
+# ztos-starq-mmbridge
+callaudiod
 
 # Bluetooth controller, management and scan tools
 bluez

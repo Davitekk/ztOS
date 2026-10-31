@@ -1,0 +1,417 @@
+#!/usr/bin/python3
+"""ztOSCoreNetworking for the Galaxy S9 (Snapdragon): the Exynos S9's
+ztoscorenetworkingd speaks AT commands to Samsung's modem; this phone's
+Qualcomm modem is ModemManager's (QRTR). This daemon keeps
+ztoscorenetworkingd's interface exactly, so the shell's status bar, Phone,
+Messaging and Settings work unchanged, and does it all through ModemManager
+(and NetworkManager for mobile data, callaudiod for where a call is heard):
+
+  /run/ztoscorenetworking/status   key=value lines: sim, operator, bars (0-5),
+                                   registered, tech, airplane, data, data_on,
+                                   ip, wifi_bars, call, call_number, call_result;
+                                   "modem" down the shell's pipe at each change
+  /run/ztoscorenetworking.ctl      airplane on|off, data on|off, sms|smse
+                                   NUMBER TEXT, call NUMBER, answer, hangup,
+                                   speaker on|off, apn
+  /var/lib/ztoscorenetworking/sms/log   in|out lines for Messaging
+  /var/lib/ztoscorenetworking/calls     out|in|missed lines for Phone
+  /etc/ztoscorenetworking/apn      the access point Settings writes (else the
+                                   SIM's network's from .../apns)
+"""
+import os
+import subprocess
+import sys
+import time
+
+from gi.repository import Gio, GLib
+
+MM = 'org.freedesktop.ModemManager1'
+CTL = '/run/ztoscorenetworking.ctl'
+STATUS_DIR = '/run/ztoscorenetworking'
+STATUS = STATUS_DIR + '/status'
+SMS_DIR = '/var/lib/ztoscorenetworking/sms'
+SMS_LOG = SMS_DIR + '/log'
+CALL_LOG = '/var/lib/ztoscorenetworking/calls'
+APN_FILE = '/etc/ztoscorenetworking/apn'
+APNS_FILE = '/usr/share/ztoscorenetworking/apns'
+WANT_DATA = '/var/lib/ztoscorenetworking/data-on'
+NM_CONNECTION = 'ztos-mobile'
+PERIOD_S = 3
+
+# MMModemState, MMCallState, MMSmsState
+STATE_DISABLED, STATE_ENABLED, STATE_SEARCHING, STATE_REGISTERED, STATE_CONNECTED = 3, 6, 7, 8, 11
+CALL_NAMES = {1: 'dialing', 2: 'ringing', 3: 'incoming', 4: 'active', 5: 'held', 6: 'incoming'}
+SMS_RECEIVED = 3
+# MMModemAccessTechnology bits, best first
+TECH = ((0x8000, '5G'), (0x4000, '4G'), (0x200, 'H+'), (0x100, 'H'), (0x80, 'H'), (0x40, 'H'), (0x20, '3G'),
+        (0x10, 'E'), (0x8, 'G'), (0x4, 'G'), (0x2, 'G'))
+# MMModem3gppRegistrationState
+REG = {1: 'home', 5: 'roaming', 2: 'searching', 3: 'denied', 6: 'home', 7: 'roaming', 9: 'home', 10: 'roaming'}
+
+bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+status = {}
+written = None
+call = {'path': None, 'since': 0, 'answered': 0, 'incoming': False, 'number': ''}
+seen_sms = set()
+user_runtime = None
+
+
+def log(text):
+    print('ztos-starq-mmbridge:', text, file=sys.stderr, flush=True)
+
+
+def tell_shell(line):
+    """The shell's control pipe, wherever its session is."""
+    for uid in range(1000, 1010):
+        path = f'/run/user/{uid}/ztmetro.ctl'
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+        except OSError:
+            continue
+        try:
+            os.write(fd, line.encode())
+        except OSError:
+            pass
+        os.close(fd)
+
+
+def append(path, line):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'a') as f:
+        f.write(line)
+    os.chmod(path, 0o644)
+
+
+def call_dbus(path, interface, method, signature=None, args=None, timeout=30000):
+    return bus.call_sync(MM, path, interface, method,
+                         GLib.Variant(signature, args) if signature else None,
+                         None, Gio.DBusCallFlags.NONE, timeout, None)
+
+
+def prop(path, interface, name, default=None):
+    try:
+        value = bus.call_sync(MM, path, 'org.freedesktop.DBus.Properties', 'Get',
+                              GLib.Variant('(ss)', (interface, name)), None, Gio.DBusCallFlags.NONE, 5000, None)
+        return value.unpack()[0]
+    except GLib.Error:
+        return default
+
+
+def modem_path():
+    try:
+        reply = bus.call_sync(MM, '/org/freedesktop/ModemManager1', 'org.freedesktop.DBus.ObjectManager',
+                              'GetManagedObjects', None, None, Gio.DBusCallFlags.NONE, 5000, None)
+    except GLib.Error:
+        return None
+    for path, interfaces in reply.unpack()[0].items():
+        if MM + '.Modem' in interfaces:
+            return path
+    return None
+
+
+# ---- what the status bar shows -------------------------------------------------
+
+def nm_data():
+    """(connected, ip) of our mobile connection in NetworkManager."""
+    try:
+        out = subprocess.run(['nmcli', '-t', '-g', 'GENERAL.STATE,IP4.ADDRESS', 'connection', 'show',
+                              NM_CONNECTION], capture_output=True, text=True, timeout=10).stdout.split('\n')
+    except (OSError, subprocess.TimeoutExpired):
+        return False, ''
+    connected = bool(out) and out[0].strip() == 'activated'
+    ip = out[1].split('/')[0] if connected and len(out) > 1 else ''
+    return connected, ip
+
+
+def wifi_bars():
+    """0-3 for the joined network's strength, -1 with none."""
+    try:
+        out = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SIGNAL', 'device', 'wifi', 'list', '--rescan', 'no'],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return -1
+    for line in out.splitlines():
+        active, _, signal = line.partition(':')
+        if active == 'yes' and signal.isdigit():
+            s = int(signal)
+            return 3 if s >= 70 else 2 if s >= 50 else 1 if s >= 30 else 0
+    return -1
+
+
+def refresh():
+    m = modem_path()
+    s = {'sim': 'absent', 'operator': '', 'bars': 0, 'registered': 'none', 'tech': '', 'airplane': 0,
+         'data': 0, 'data_on': int(os.path.exists(WANT_DATA)), 'ip': '', 'wifi_bars': wifi_bars()}
+    if m:
+        state = prop(m, MM + '.Modem', 'State', 0)
+        failed_reason = prop(m, MM + '.Modem', 'StateFailedReason', 0)
+        sim = prop(m, MM + '.Modem', 'Sim', '/')
+        lock = prop(m, MM + '.Modem', 'UnlockRequired', 0)
+        # MMModemLock: 2 SIM PIN and 4 SIM PUK stop the SIM; PIN2 and PUK2 (3, 5)
+        # only guard fixed dialling; 6 and up are the network's locks
+        if failed_reason == 2 or sim in ('/', None):     # MM_MODEM_STATE_FAILED_REASON_SIM_MISSING
+            s['sim'] = 'absent'
+        elif lock == 2:
+            s['sim'] = 'pin'
+        elif lock == 4:
+            s['sim'] = 'puk'
+        elif lock in (0, 1, 3, 5) and failed_reason in (0, 1):
+            s['sim'] = 'ready'
+        else:
+            s['sim'] = 'error'
+        s['airplane'] = int(state == STATE_DISABLED or prop(m, MM + '.Modem', 'PowerState', 3) != 3)
+        quality = prop(m, MM + '.Modem', 'SignalQuality', (0, False))[0]
+        reg = prop(m, MM + '.Modem.Modem3gpp', 'RegistrationState', 0)
+        s['registered'] = REG.get(reg, 'searching' if state == STATE_SEARCHING else 'none')
+        registered = s['registered'] in ('home', 'roaming')
+        s['bars'] = 0 if not registered else max(1, min(5, (int(quality) + 19) // 20))
+        s['operator'] = prop(m, MM + '.Modem.Modem3gpp', 'OperatorName', '') if registered else ''
+        techs = prop(m, MM + '.Modem', 'AccessTechnologies', 0)
+        s['tech'] = next((name for bit, name in TECH if techs & bit), '') if registered else ''
+    connected, ip = nm_data()
+    s['data'], s['ip'] = int(connected), ip
+    s.update(call_status())
+    return s
+
+
+def publish(s):
+    global written
+    if s == written:
+        return
+    os.makedirs(STATUS_DIR, exist_ok=True)
+    with open(STATUS + '.new', 'w') as f:
+        for key in ('call_result', 'call', 'call_number', 'sim', 'operator', 'bars', 'registered', 'tech',
+                    'airplane', 'data', 'data_on', 'ip', 'wifi_bars'):
+            f.write(f'{key}={s.get(key, "")}\n')
+    os.chmod(STATUS + '.new', 0o644)
+    os.replace(STATUS + '.new', STATUS)
+    written = dict(s)
+    tell_shell('modem\n')
+
+
+# ---- calls --------------------------------------------------------------------
+
+def callaudio(*args):
+    """callaudiod (the user's session): the voice call's UCM verb and route."""
+    for uid in range(1000, 1010):
+        bus_path = f'/run/user/{uid}/bus'
+        if os.path.exists(bus_path):
+            name = subprocess.run(['id', '-nu', str(uid)], capture_output=True, text=True).stdout.strip()
+            subprocess.run(['runuser', '-u', name, '--', 'env', f'DBUS_SESSION_BUS_ADDRESS=unix:path={bus_path}',
+                            'callaudiocli', *args], capture_output=True, timeout=10)
+            return
+
+
+def call_status():
+    m = modem_path()
+    calls = prop(m, MM + '.Modem.Voice', 'Calls', []) if m else []
+    live = None
+    for path in calls:
+        state = prop(path, MM + '.Call', 'State', 7)
+        if state in CALL_NAMES:
+            live = (path, state)
+            break
+    if live:
+        path, state = live
+        if call['path'] != path:          # a new call
+            call.update(path=path, since=int(time.time()), answered=0,
+                        incoming=prop(path, MM + '.Call', 'Direction', 2) == 1,
+                        number=prop(path, MM + '.Call', 'Number', '') or '', result='')
+            if call['incoming']:
+                tell_shell('screen on\n')
+                tell_shell('call_screen\n')
+            callaudio('-m', '1')          # the voice call verb: earpiece and the mics
+        if state == 4 and not call['answered']:
+            call['answered'] = int(time.time())
+        return {'call': CALL_NAMES[state], 'call_number': call['number'], 'call_result': ''}
+    if call['path']:                      # it ended
+        lasted = int(time.time()) - call['answered'] if call['answered'] else 0
+        kind = 'out' if not call['incoming'] else 'in' if call['answered'] else 'missed'
+        append(CALL_LOG, f"{kind}\t{call['since']}\t{call['number'] or 'unknown'}\t{lasted}\n")
+        if kind == 'missed':
+            tell_shell(f"notify Phone|Missed call|{call['number'] or 'unknown'}\n")
+        tell_shell('call_screen end\n')
+        callaudio('-m', '0')
+        call['path'] = None
+        call['result'] = 'ended'
+    return {'call': 'idle', 'call_number': '', 'call_result': call.get('result', '')}
+
+
+# ---- messages -----------------------------------------------------------------
+
+def sms_in():
+    m = modem_path()
+    if not m:
+        return
+    try:
+        paths = call_dbus(m, MM + '.Modem.Messaging', 'List').unpack()[0]
+    except GLib.Error:
+        return
+    for path in paths:
+        if path in seen_sms or prop(path, MM + '.Sms', 'State', 0) != SMS_RECEIVED:
+            continue
+        seen_sms.add(path)
+        number = prop(path, MM + '.Sms', 'Number', '') or 'unknown'
+        text = prop(path, MM + '.Sms', 'Text', '') or ''
+        escaped = text.replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')
+        append(SMS_LOG, f'in\t{int(time.time())}\t{number}\t{escaped}\n')
+        tell_shell(f"notify Messaging|{number}|{escaped.replace('|', '/')[:240]}\n")
+        try:
+            call_dbus(m, MM + '.Modem.Messaging', 'Delete', '(o)', (path,))
+        except GLib.Error as error:
+            log(f'could not delete a message from the modem: {error.message}')
+        log(f'a message came in ({len(text)} characters)')
+
+
+def sms_out(number, text):
+    m = modem_path()
+    ok = False
+    if m:
+        try:
+            path = call_dbus(m, MM + '.Modem.Messaging', 'Create', '(a{sv})',
+                             ({'number': GLib.Variant('s', number), 'text': GLib.Variant('s', text)},)).unpack()[0]
+            call_dbus(path, MM + '.Sms', 'Send', timeout=120000)
+            ok = True
+            call_dbus(m, MM + '.Modem.Messaging', 'Delete', '(o)', (path,))
+        except GLib.Error as error:
+            log(f'a message did not go: {error.message}')
+    append(SMS_LOG, f"out\t{int(time.time())}\t{number}\t{'ok' if ok else 'failed'}\n")
+
+
+# ---- mobile data --------------------------------------------------------------
+
+def apn():
+    """Settings' access point, else the SIM's network's (by the IMSI's MCC+MNC)."""
+    cfg = {'apn': '', 'user': '', 'password': '', 'auth': ''}
+    try:
+        for line in open(APN_FILE):
+            key, sep, value = line.partition('=')
+            if sep and not line.startswith('#') and key.strip() in cfg:
+                cfg[key.strip()] = value.strip()
+    except OSError:
+        pass
+    if not cfg['apn']:
+        m = modem_path()
+        sim = prop(m, MM + '.Modem', 'Sim', '/') if m else '/'
+        imsi = prop(sim, MM + '.Sim', 'Imsi', '') if sim not in ('/', None) else ''
+        try:
+            lines = open(APNS_FILE).read().splitlines()
+        except OSError:
+            lines = []
+        for digits in (6, 5):
+            code = imsi[:digits]
+            for line in lines:
+                if code and line.startswith(code + ' '):
+                    cfg['apn'] = line[len(code) + 1:].strip()
+                    break
+            if cfg['apn']:
+                break
+    return cfg
+
+
+def data(on):
+    if on:
+        open(WANT_DATA, 'w').close()
+        cfg = apn()
+        subprocess.run(['nmcli', 'connection', 'delete', NM_CONNECTION], capture_output=True)
+        args = ['nmcli', 'connection', 'add', 'type', 'gsm', 'ifname', '*', 'con-name', NM_CONNECTION,
+                'gsm.apn', cfg['apn'], 'connection.autoconnect', 'yes']
+        if cfg['user']:
+            args += ['gsm.username', cfg['user'], 'gsm.password', cfg['password']]
+        subprocess.run(args, capture_output=True)
+        subprocess.run(['nmcli', 'connection', 'up', NM_CONNECTION], capture_output=True, timeout=90)
+    else:
+        try:
+            os.unlink(WANT_DATA)
+        except FileNotFoundError:
+            pass
+        subprocess.run(['nmcli', 'connection', 'down', NM_CONNECTION], capture_output=True)
+        subprocess.run(['nmcli', 'connection', 'modify', NM_CONNECTION, 'connection.autoconnect', 'no'],
+                       capture_output=True)
+
+
+# ---- the control pipe ---------------------------------------------------------
+
+def unescape(text):
+    out, i = [], 0
+    while i < len(text):
+        if text[i] == '\\' and i + 1 < len(text):
+            out.append({'n': '\n', 't': '\t'}.get(text[i + 1], text[i + 1]))
+            i += 2
+        else:
+            out.append(text[i])
+            i += 1
+    return ''.join(out)
+
+
+def command(line):
+    m = modem_path()
+    if not line.startswith(('sms ', 'smse ')):
+        log(f'asked: {line[:40]}')
+    try:
+        if line in ('screen on', 'screen off'):
+            return
+        if line in ('airplane on', 'airplane off') and m:
+            call_dbus(m, MM + '.Modem', 'Enable', '(b)', (line == 'airplane off',))
+        elif line in ('data on', 'data off'):
+            data(line == 'data on')
+        elif line.startswith(('sms ', 'smse ')):
+            body = line[5:] if line.startswith('smse ') else line[4:]
+            number, _, text = body.partition(' ')
+            sms_out(number, unescape(text) if line.startswith('smse ') else text)
+        elif line.startswith('call ') and m and not call['path']:
+            number = ''.join(c for c in line[5:] if c in '0123456789+*#')
+            path = call_dbus(m, MM + '.Modem.Voice', 'CreateCall', '(a{sv})',
+                             ({'number': GLib.Variant('s', number)},)).unpack()[0]
+            call_dbus(path, MM + '.Call', 'Start')
+        elif line == 'answer' and call['path']:
+            call_dbus(call['path'], MM + '.Call', 'Accept')
+        elif line == 'hangup' and m:
+            call_dbus(m, MM + '.Modem.Voice', 'HangupAll')
+        elif line in ('speaker on', 'speaker off'):
+            callaudio('-s', '1' if line == 'speaker on' else '0')
+        elif line == 'apn' and os.path.exists(WANT_DATA):
+            data(True)
+    except (GLib.Error, OSError, subprocess.TimeoutExpired) as error:
+        log(f'{line[:20]}: {getattr(error, "message", error)}')
+    tick()
+
+
+def on_ctl(channel, condition):
+    try:
+        lines = os.read(ctl_fd, 8192).decode(errors='replace')
+    except BlockingIOError:
+        return True
+    for line in lines.splitlines():
+        if line.strip():
+            command(line.strip())
+    return True
+
+
+def tick():
+    try:
+        sms_in()
+        publish(refresh())
+    except Exception as error:      # never let one bad poll stop the daemon
+        log(f'poll: {error}')
+    return True
+
+
+os.makedirs('/etc/ztoscorenetworking', exist_ok=True)
+os.makedirs(SMS_DIR, exist_ok=True)
+try:
+    os.unlink(CTL)
+except FileNotFoundError:
+    pass
+os.mkfifo(CTL, 0o666)
+os.chmod(CTL, 0o666)
+ctl_fd = os.open(CTL, os.O_RDWR | os.O_NONBLOCK)
+# Settings writes the access point here as the user
+if not os.path.exists(APN_FILE):
+    open(APN_FILE, 'a').close()
+os.chmod(APN_FILE, 0o666)
+GLib.io_add_watch(GLib.IOChannel.unix_new(ctl_fd), GLib.PRIORITY_DEFAULT, GLib.IO_IN, on_ctl)
+GLib.timeout_add_seconds(PERIOD_S, tick)
+tick()
+log('up: ModemManager behind ztoscorenetworkingd\'s interface')
+GLib.MainLoop().run()

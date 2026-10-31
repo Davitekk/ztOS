@@ -1,0 +1,15 @@
+# ztOSCoreNetworking on the Galaxy S9 (Snapdragon): the Exynos S9's
+# ztoscorenetworkingd and its modem starter are for Samsung's own modem; this
+# phone's is ModemManager's, behind the same interface (ztos-starq-mmbridge).
+[Unit]
+Description=Modem state for the shell (signal, operator, data), airplane mode, calls, SMS
+After=ModemManager.service NetworkManager.service
+Wants=ModemManager.service
+
+[Service]
+ExecStart=/usr/local/sbin/ztos-starq-mmbridge
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

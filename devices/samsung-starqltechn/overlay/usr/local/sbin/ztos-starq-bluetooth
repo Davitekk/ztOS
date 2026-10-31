@@ -1,0 +1,79 @@
+#!/bin/sh
+# Bluetooth: the BCM4361's Bluetooth side, a serdev on UART6 driven by
+# hci_uart's Broadcom driver (kernel/patch-btbcm.py), which powers it, loads
+# its patch file and runs it at 3 Mbaud. This makes sure that setup finished,
+# then gives the controller the phone's own address.
+#
+# The chip can still miss the first command after it powers up (the start at
+# boot, every time so far; about one in eight after that; kernel/patch-btbcm.py),
+# and the controller then stays dead until it is powered again. So: wait for
+# setup, and if it fails, power it again by re-binding the driver, up to three
+# times.
+#
+# Nothing may talk to the controller during setup: management requests then
+# can leave it unregistered (the Exynos S9's lesson). So this only reads the
+# kernel log: the last thing setup prints here is btbcm's transmit power quirk.
+DEV=serial0-0
+DRV=/sys/bus/serial/drivers/hci_uart_bcm
+DONE="hci0: HCI Read Transmit Power Level command is advertised"
+
+FAILED="hci0: BCM: Reset failed"
+
+done_count() { dmesg | grep -c "$DONE"; }
+fail_count() { dmesg | grep -c "$FAILED"; }
+
+# $1, $2: setups and failures seen before; true once there is one more
+# setup, false at one more failure or after 30 s
+wait_setup() {
+	i=0
+	while [ "$i" -lt 60 ]; do
+		[ "$(done_count)" -gt "$1" ] && return 0
+		[ "$(fail_count)" -gt "$2" ] && return 1
+		i=$((i + 1))
+		sleep 0.5
+	done
+	return 1
+}
+
+# the driver probes when udev loads hci_uart; it may not be there yet
+i=0
+until [ -e "$DRV/$DEV" ]; do
+	i=$((i + 1))
+	[ "$i" -lt 60 ] || { echo "ztos-starq-bluetooth: no Bluetooth device ($DEV)" >&2; exit 0; }
+	sleep 1
+done
+
+try=0
+seen=0 failed=0		# the first setup is the one started at boot
+until wait_setup "$seen" "$failed"; do
+	try=$((try + 1))
+	seen=$(done_count) failed=$(fail_count)
+	if [ "$try" -gt 3 ]; then
+		echo "ztos-starq-bluetooth: setup failed three more times; Bluetooth is off" >&2
+		exit 1
+	fi
+	echo "ztos-starq-bluetooth: setup did not finish; powering the controller again ($try)"
+	echo "$DEV" > "$DRV/unbind"
+	sleep 1
+	echo "$DEV" > "$DRV/bind"
+done
+
+# registered a moment after setup
+i=0
+until btmgmt info 2> /dev/null | grep -q "^hci0:"; do
+	i=$((i + 1))
+	[ "$i" -lt 20 ] || { echo "ztos-starq-bluetooth: hci0 not registered" >&2; exit 1; }
+	sleep 1
+done
+
+# the address from EFS (ztos-starq-firmware read it); the chip starts with a
+# placeholder (43:61:B2:...)
+addr=$(cat /run/ztos-firmware/bt-addr 2> /dev/null)
+[ -n "$addr" ] || { echo "ztos-starq-bluetooth: no address in EFS; keeping the chip's"; exit 0; }
+current=$(btmgmt --index 0 info | sed -n 's/^.*addr \([0-9A-Fa-f:]\{17\}\).*$/\1/p' | head -n1)
+if [ "$(echo "$current" | tr a-f A-F)" != "$(echo "$addr" | tr a-f A-F)" ]; then
+	btmgmt --index 0 power off > /dev/null
+	btmgmt --index 0 public-addr "$addr" > /dev/null
+	btmgmt --index 0 power on > /dev/null
+	echo "ztos-starq-bluetooth: address set from EFS"
+fi

@@ -6,7 +6,42 @@ bootloader. The US and Canadian Snapdragon S9 (SM-G960U, U1, W) cannot be
 unlocked and cannot run this. The Exynos S9 (SM-G960F, N) is `starlte`, the
 main ztOS port.
 
-**STATUS_TABLE**
+## Status
+
+Tried on an SCV38 with a SIM in it (WindTre, Italy), mainline Linux 7.1.
+**Works**: tried, and does what it should. **Partial**: some of it works; the
+notes say what. **Untested**: written, not yet tried with real use.
+**Not started**: nothing yet.
+
+### Hardware
+
+| Category | Feature | Status | Notes |
+|---|---|---|---|
+| Boot | Booting from internal storage (UFS) | Works | Samsung's bootloader, U-Boot, the kernel; if the root is not found, a rescue shell on USB |
+| Display | Panel, 1440x2960 | Works | S6E3HA8 (DSI, MSM DPU) |
+| Display | Brightness | Works | Samsung's AOR table, 573 steps |
+| Input | Touchscreen | Works | S6SY761, multi-touch |
+| Input | Power, volume and Bixby keys | Works | Bixby is `KEY_ASSISTANT` |
+| Input | Vibration | Works | ztOSIAL's generic Haptics1 |
+| Input | Notification light | Works | MAX77705 RGB: colour and blink through ztOSIAL Lights1 |
+| 3D | GPU | Works | Adreno 630 through freedreno |
+| Power | Battery and charger | Works | MAX17042 gauge, MAX77705 charger |
+| Power | Clock across reboots | Works | The PMIC's RTC with a saved offset ([`ztos-starq-rtc`](overlay/usr/local/sbin/ztos-starq-rtc)); the AP may not set it |
+| Network | Wi-Fi | Works | BCM4361 B2 on PCIe (brcmfmac), the phone's own MAC address |
+| Network | Bluetooth | **BT_STATUS** | **BT_NOTES** |
+| Network | Mobile data (4G) | Works | ModemManager over QRTR; NetworkManager; the access point from the SIM's operator |
+| Network | USB networking to a computer | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
+| Modem | SIM, registration, signal | Works | 4G; EFS (IMEI, calibration) is never written |
+| Modem | SMS | Works | Sending and receiving tried |
+| Modem | Calls | **CALL_STATUS** | **CALL_NOTES** |
+| Audio | Speaker | Works | WCD9340 and the MAX98512 pair, both speakers |
+| Audio | Microphones | Works | Recorded and played back |
+| Audio | Headphones | Untested | In the profile (UCM) |
+| Sensors | Accelerometer, light, proximity | Works | On the sensor DSP (SLPI), through hexagonrpcd, libssc and iio-sensor-proxy |
+| Storage | microSD | Works | |
+| Location | GPS | **GPS_STATUS** | **GPS_NOTES** |
+| Camera | Cameras | Not started | No mainline drivers for the sensors |
+| Other | Fingerprint, NFC/FeliCa, iris, heart rate | Not started | |
 
 ## How it is made
 

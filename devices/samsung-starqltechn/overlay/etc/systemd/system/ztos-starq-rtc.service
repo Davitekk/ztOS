@@ -1,0 +1,20 @@
+[Unit]
+Description=Clock from the PMIC's RTC and its saved offset
+Documentation=file:///usr/local/sbin/ztos-starq-rtc
+DefaultDependencies=no
+RequiresMountsFor=/var/lib
+After=local-fs.target
+# not before sysinit.target: the RTC driver comes with udev's module loading
+Before=time-set.target systemd-timesyncd.service shutdown.target
+Wants=time-set.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ztos-starq-rtc restore
+# at shutdown, while /var is still mounted
+ExecStop=/usr/local/sbin/ztos-starq-rtc save
+
+[Install]
+WantedBy=sysinit.target

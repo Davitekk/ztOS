@@ -1,0 +1,9 @@
+[Unit]
+Description=Save the PMIC RTC's offset to real time, now and then (a battery pull skips shutdown)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

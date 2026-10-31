@@ -1,0 +1,14 @@
+[Unit]
+Description=Galaxy S9 (Snapdragon): Bluetooth set up, with the address from EFS
+Documentation=file:///usr/local/sbin/ztos-starq-bluetooth
+After=bluetooth.service ztos-starq-firmware.service
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=300
+ExecStart=/usr/local/sbin/ztos-starq-bluetooth
+
+[Install]
+WantedBy=multi-user.target

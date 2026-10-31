@@ -1,0 +1,13 @@
+# ztOSCoreSensorFramework on the Galaxy S9 (Snapdragon): the hardware support
+# this phone brings itself, in place of the Exynos S9's list (its modules,
+# Cirrus audio, Samsung sensor hub and modem daemons are not on this phone:
+# mainline drivers and the Qualcomm services below do that here).
+# kind|id|argument|title, in the order they are started.
+unit|ztos-starq-firmware.service||Firmware
+unit|rmtfs.service||Modem: remote file system
+unit|tqftpserv.service||Modem: file server
+unit|ModemManager.service||Modem
+unit|ztoscorenetworking.service||ztOSCoreNetworking: calls, messages, data
+unit|bluetooth.service||Bluetooth
+unit|zrnperfd.service||Performance
+session|ztapps||App list

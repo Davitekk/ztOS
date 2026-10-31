@@ -32,7 +32,8 @@ if [ -d "$IMG" ]; then
 	[ -f "$IMG/info" ] && [ -f "$IMG/SHA256SUMS" ] || { echo "$IMG: no info or SHA256SUMS (root-chunks.sh)" >&2; exit 1; }
 	SIZE=$(sed -n 's/^size=//p' "$IMG/info")
 	CHUNK=$(sed -n 's/^chunk=//p' "$IMG/info")
-	magic=$(gzip -dc "$IMG/0000.gz" | od -An -tx2 -j 1080 -N 2 | tr -d ' ')
+	# (od stops reading at once: gzip's SIGPIPE is no failure here)
+	magic=$({ gzip -dc "$IMG/0000.gz" 2> /dev/null || true; } | od -An -tx2 -j 1080 -N 2 | tr -d ' ')
 else
 	[ -s "$IMG" ] || { echo "no image: $IMG" >&2; exit 1; }
 	SIZE=$(wc -c < "$IMG" | tr -d ' ')

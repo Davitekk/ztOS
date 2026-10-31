@@ -1,0 +1,48 @@
+#!/bin/sh
+# The clock across reboots. The PMIC's RTC (rtc-pm8xxx, rtc0) keeps counting
+# while the phone is off, but the AP may not set it: it counts from whenever
+# the battery was last connected, so the kernel starts the system clock in
+# 1970. Android keeps the RTC's offset to real time in a file; so does this:
+#
+#   ztos-starq-rtc restore   at boot: system time = RTC + saved offset
+#   ztos-starq-rtc save      offset = system time - RTC, once the time is real
+#
+# The time is real once NTP (timesyncd) has set it, or once restore has set it this boot.
+set -eu
+RTC=/sys/class/rtc/rtc0/since_epoch
+STATE=/var/lib/ztos-starq
+OFFSET=$STATE/rtc-offset
+RESTORED=/run/ztos-starq-rtc-restored
+
+# rtc-pm8xxx is a module: udev loads it a few seconds into the boot
+i=0
+until [ -r "$RTC" ]; do
+	i=$((i + 1))
+	[ "$i" -lt 100 ] || { echo "ztos-starq-rtc: no $RTC" >&2; exit 0; }
+	sleep 0.2
+done
+
+case "${1:-}" in
+restore)
+	[ -s "$OFFSET" ] || { echo "ztos-starq-rtc: no saved offset yet (the time comes from NTP)"; exit 0; }
+	off=$(cat "$OFFSET")
+	case "$off" in ''|*[!0-9-]*) echo "ztos-starq-rtc: bad $OFFSET" >&2; exit 0 ;; esac
+	now=$(( $(cat "$RTC") + off ))
+	date -u -s "@$now" > /dev/null
+	touch "$RESTORED"
+	echo "ztos-starq-rtc: clock set from the RTC: $(date -u)"
+	;;
+save)
+	# timesyncd's mark of a synchronised clock (no D-Bus: this also runs at shutdown)
+	if [ ! -e /run/systemd/timesync/synchronized ] && [ ! -e "$RESTORED" ]; then
+		exit 0
+	fi
+	install -d "$STATE"
+	echo $(( $(date -u +%s) - $(cat "$RTC") )) > "$OFFSET.new"
+	mv "$OFFSET.new" "$OFFSET"
+	;;
+*)
+	echo "usage: ztos-starq-rtc restore|save" >&2
+	exit 2
+	;;
+esac

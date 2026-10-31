@@ -1,0 +1,8 @@
+[Unit]
+Description=Save the PMIC RTC's offset to real time
+Documentation=file:///usr/local/sbin/ztos-starq-rtc
+After=ztos-starq-rtc.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ztos-starq-rtc save

@@ -35,7 +35,7 @@ assert 'model = "Samsung Galaxy S9 SM-G9600";' in dts, f"{DTS}: not the starqlte
 assert 'compatible = "samsung,starqltechn", "qcom,sdm845";' in dts
 # what the additions refer to
 for label in ("pcie0: pcie@1c00000", "pcie0_phy: phy@1c06000", "uart6: serial@898000",
-              "qup_uart6_4pin: qup-uart6-4pin-state"):
+              "qup_uart6_4pin: qup-uart6-4pin-state", "slpi_mem: slpi@96700000", "qupv3_id_0: geniqup@"):
     assert label in dtsi, f"{DTSI.name}: {label} not found"
 for label in ("vreg_l1a_0p875: ldo1", "vreg_l26a_1p2: ldo26", "&pm8998_gpios {", "&tlmm {"):
     assert label in dts, f"{DTS.name}: {label} not found"
@@ -78,6 +78,21 @@ ROOT_NODE = """
 
 NODES = """
 """ + MARK + """
+/*
+ * The SLPI's (sensor DSP) region is Samsung's 16 MiB (stock pil_slpi_region,
+ * 0x96700000), not SDM845's 20 MiB: the board's ADSP region starts at
+ * 0x97800000, and the larger one overlaps it, so the SLPI could not map its
+ * memory ("can't request region", -EBUSY) and never started.
+ */
+&slpi_mem {
+	reg = <0 0x96700000 0 0x1000000>;
+};
+
+/* The QUP block Bluetooth's UART (SE6) is on, which upstream leaves off */
+&qupv3_id_0 {
+	status = "okay";
+};
+
 &pcie0 {
 	perst-gpios = <&tlmm 35 GPIO_ACTIVE_LOW>;
 	wake-gpios = <&tlmm 37 GPIO_ACTIVE_HIGH>;
@@ -206,6 +221,17 @@ if MARK not in dts:
     old = '\t\t\tlabel = "Bixby";\n\t\t\tgpios = <&pm8998_gpios 19 GPIO_ACTIVE_LOW>;\n\t\t\tlinux,code = <KEY_ENTER>;\n'
     assert dts.count(old) == 1, f"{DTS.name}: Bixby key anchor"
     dts = dts.replace(old, old.replace("KEY_ENTER", "KEY_ASSISTANT"))
+
+    # The notification light: leds-max77705 reads "reg" on an RGB node and
+    # fails its probe without one (-EINVAL), which upstream's node lacks; the
+    # value is only checked against the chip's 4 LEDs.
+    old = ('\t\tleds {\n\t\t\tcompatible = "maxim,max77705-rgb";\n\n'
+           '\t\t\tmulti-led {\n\t\t\t\tcolor = <LED_COLOR_ID_RGB>;\n')
+    assert dts.count(old) == 1, f"{DTS.name}: RGB LED anchor"
+    dts = dts.replace(old,
+        '\t\tleds {\n\t\t\tcompatible = "maxim,max77705-rgb";\n'
+        '\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\n'
+        '\t\t\tmulti-led@0 {\n\t\t\t\treg = <0>;\n\t\t\t\tcolor = <LED_COLOR_ID_RGB>;\n')
 
 if dts != orig:
     DTS.write_text(dts)
