@@ -170,6 +170,11 @@ if [ "$TARGET" = starlte ] || [ "$TARGET" = starqltechn ]; then
 	# the kernel is ztOS's own boot image there, never a package
 	sed -i 's/^#\?IgnorePkg *=.*/IgnorePkg   = linux-aarch64 linux-aarch64-headers/' "$R/etc/pacman.conf"
 fi
+if [ "$TARGET" = starqltechn ]; then
+	# its ModemManager daemon is rebuilt with a fix (userspace/build.sh) and
+	# loads the package's plugins: both of the same version
+	sed -i 's/^IgnorePkg *=.*/& modemmanager libmm-glib/' "$R/etc/pacman.conf"
+fi
 
 step "setting up package signing keys"
 ch sh -c 'pacman-key --init && pacman-key --populate archlinuxarm' > /dev/null

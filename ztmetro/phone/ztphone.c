@@ -78,6 +78,7 @@ static struct call_item calls[MAX_CALLS];
 static int n_calls;
 static char state[16] = "idle", number[40];	/* the call there is, if any */
 static time_t answered_at;
+static uint32_t dialled_at;	/* zmc_now_ms() of our own "call", until the daemon says so */
 static int came_from = P_HISTORY;	/* where to go back to when a call ends */
 static char entry[40];			/* the number the entry page is of */
 static int menu_for = -1;
@@ -656,6 +657,7 @@ static void dial(const char *who) {
 	snprintf(number, sizeof(number), "%s", who);
 	snprintf(state, sizeof(state), "dialing");
 	answered_at = 0;
+	dialled_at = zmc_now_ms();
 	zmc_haptic("click");
 	if (zmc.page != P_CALL) {
 		came_from = zmc.page == P_ENTRY ? P_HISTORY : zmc.page;
@@ -917,9 +919,15 @@ static void tick(void) {
 		snprintf(now, sizeof(now), "idle");
 	}
 	bool changed = strcmp(now, state) != 0;
-	/* (just dialled: the daemon may not have said so yet) */
-	if (!strcmp(state, "dialing") && !strcmp(now, "idle") && !changed) {
+	/* (just dialled: the daemon may not have said so yet, and "idle" is then
+	 * the state before the call, not its end. (A test of `changed` here could
+	 * never hold: "dialing" and "idle" differ.) */
+	if (!strcmp(state, "dialing") && !strcmp(now, "idle") && dialled_at &&
+			zmc_now_ms() - dialled_at < 8000) {
 		return;
+	}
+	if (strcmp(now, "idle")) {
+		dialled_at = 0;		/* the daemon has it */
 	}
 	snprintf(state, sizeof(state), "%s", now);
 	if (who[0]) {
@@ -1005,6 +1013,7 @@ int main(int argc, char **argv) {
 	if (call_now && !on_call() && modem_tell("call %s", call_now)) {
 		snprintf(number, sizeof(number), "%.38s", call_now);
 		snprintf(state, sizeof(state), "dialing");
+		dialled_at = zmc_now_ms();
 	}
 	if (call_screen_only && !on_call()) return 0;
 	if (on_call()) {

@@ -37,12 +37,12 @@ chown -R 0:0 "$R/usr/lib/modules/$KREL"
 ch depmod -a "$KREL"
 
 # --- the Qualcomm userspace (modem, DSPs, call audio), built here --------------------
-step "building the modem and DSP services (qrtr, rmtfs, tqftpserv, hexagonrpcd, q6voiced, 81voltd)"
+step "building the modem and DSP services (qrtr, rmtfs, tqftpserv, hexagonrpcd, q6voiced, 81voltd, ModemManager)"
 QS=$DEVROOT/build/starqltechn-userspace
 sh "$D/userspace/fetch.sh" "$QS"
 rm -rf "$R/usr/src/ztos-qcom"
 install -d "$R/usr/src/ztos-qcom"
-cp "$QS"/*.tar.gz "$D/userspace/build.sh" "$R/usr/src/ztos-qcom/"
+cp "$QS"/*.tar.gz "$D/userspace/build.sh" "$D/userspace/patch-modemmanager.py" "$R/usr/src/ztos-qcom/"
 ch sh /usr/src/ztos-qcom/build.sh
 rm -rf "$R/usr/src/ztos-qcom"
 

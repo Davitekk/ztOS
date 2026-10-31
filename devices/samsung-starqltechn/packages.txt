@@ -31,5 +31,8 @@ i2c-tools
 pciutils
 usbutils
 
-# building the Qualcomm userspace in this root (userspace/build.sh)
+# building the Qualcomm userspace and ModemManager in this root
+# (userspace/build.sh; ModemManager's needs gdbus-codegen and xsltproc)
 meson
+glib2-devel
+libxslt

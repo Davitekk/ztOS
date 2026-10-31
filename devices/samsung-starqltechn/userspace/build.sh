@@ -44,6 +44,18 @@ mesonb msm-modem-13 -Duim-selection=true -Dwwan-port=false -Ddownstream=false \
 	-Dopenrc=false -Dsystemd=false
 mesonb q6voiced-0.3.1 -Dopenrc=disabled -Dsystemd=disabled
 mesonb 81voltd-v1.2.0
+# ModemManager, Arch's version, with patch-modemmanager.py (a use-after-free
+# that crashed it at every few mobile data reconnections): only its daemon,
+# beside Arch's, which ModemManager.service.d/10-ztos.conf starts instead;
+# its plugins are Arch's, of the same version (IgnorePkg keeps it so).
+python3 "$S/patch-modemmanager.py" ModemManager-1.24.2
+(cd ModemManager-1.24.2 && meson setup --prefix=/usr --libdir=lib --buildtype=release \
+	--wrap-mode=nodownload -Dpolkit=permissive -Dintrospection=false -Dvapi=false \
+	-Dman=false -Dbash_completion=false -Dtests=false -Dexamples=false \
+	-Dsystemdsystemunitdir=no -Dudevdir=/usr/lib/udev output > /dev/null &&
+	meson compile -C output ModemManager > /dev/null)
+install -Dm755 ModemManager-1.24.2/output/src/ModemManager /usr/local/sbin/ModemManager
+echo "qcom: ModemManager (patched) installed"
 # OpenRC's leftovers, where a build has no switch for them
 rm -f /etc/init.d/81voltd /etc/init.d/tqftpserv /etc/conf.d/msm-modem-uim-selection
 rmdir /etc/init.d /etc/conf.d 2> /dev/null || true
