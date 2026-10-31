@@ -684,7 +684,10 @@ static void activate(int action, int arg) {
 		char file[32];
 		snprintf(file, sizeof(file), "dtmf%s.wav", arg == '*' ? "ast" : arg == '#' ? "pd" : (char[2]){arg, 0});
 		sound_play(file, false);
-		if (on_call()) break;
+		if (on_call()) {
+			modem_tell("dtmf %c", arg);	/* to the other end, as a tone in the call */
+			break;
+		}
 		if (len + 1 < sizeof(digits) - 1) {
 			digits[len] = (char)arg;
 			digits[len + 1] = 0;
@@ -731,6 +734,7 @@ static void activate(int action, int arg) {
 		break;
 	case ACT_MUTE:
 		muted = !muted;
+		modem_tell(muted ? "mute on" : "mute off");
 		break;
 	case ACT_SPEAKER:
 		speaker = !speaker;

@@ -6127,10 +6127,14 @@ static void show_toplevel(struct zt_server *server, struct zt_toplevel *toplevel
 	const char *runtime_app_id = toplevel && toplevel->xdg_toplevel ?
 		toplevel->xdg_toplevel->app_id : NULL;
 	bool demoloop = demoloop_active();
-	if (runtime_app_id && strncmp(runtime_app_id, "waydroid.", 9) == 0) {
+	/* "waydroid.<package>": one Android app; "Waydroid": its whole interface
+	 * (the Waydroid tile), which froze under its own window as "idle" */
+	if (runtime_app_id && strncasecmp(runtime_app_id, "waydroid", 8) == 0) {
 		waydroid_power_request("active");
 		run_detached("ztos-waydroid-power", "sync", NULL, NULL);
-		waydroid_visible(runtime_app_id);
+		if (strncmp(runtime_app_id, "waydroid.", 9) == 0) {
+			waydroid_visible(runtime_app_id);	/* (the package after the dot) */
+		}
 	} else {
 		waydroid_power_request(demoloop ? "active" : "idle");
 		run_detached("ztos-waydroid-power", "sync", NULL, NULL);
@@ -8954,7 +8958,7 @@ static void screen_set(struct zt_server *server, bool on) {
 		}
 	} else {
 		const char *id = server->shown ? server->shown->xdg_toplevel->app_id : NULL;
-		waydroid_power_request(demoloop || (id && !strncmp(id, "waydroid.", 9)) ? "active" : "idle");
+		waydroid_power_request(demoloop || (id && !strncasecmp(id, "waydroid", 8)) ? "active" : "idle");
 		run_detached("ztos-waydroid-power", "sync", NULL, NULL);
 	}
 	if (on) {

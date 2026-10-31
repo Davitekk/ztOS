@@ -55,16 +55,19 @@ static struct item items[MAX_ITEMS];
 static int n_items, shown = -1;	/* shown: the item on the detail page */
 static bool loaded;
 
-/* The units that are ztOS beyond the sensor framework's own list. */
-static const struct { enum kind kind; const char *id, *title; } extras[] = {
+/* The units that are ztOS beyond the sensor framework's own list. `only`: a
+ * phone's own (its manifest's codename), looked for on that phone alone;
+ * another phone names its own in its components file. */
+#define STARLTE "samsung-starlte"
+static const struct { enum kind kind; const char *id, *title, *only; } extras[] = {
 	{ K_SYSTEM, "ztoscoresensorframework.service", "ztOSCoreSensorFramework" },
-	{ K_SYSTEM, "zrn-bluetooth.service", "Bluetooth controller" },
-	{ K_SYSTEM, "zrn-bluetooth-addr.service", "Bluetooth address" },
+	{ K_SYSTEM, "zrn-bluetooth.service", "Bluetooth controller", STARLTE },
+	{ K_SYSTEM, "zrn-bluetooth-addr.service", "Bluetooth address", STARLTE },
 	{ K_SYSTEM, "bluetooth.service", "Bluetooth (BlueZ)" },
 	{ K_SYSTEM, "NetworkManager.service", "Networking" },
-	{ K_SYSTEM, "zrn-charge.service", "Charging" },
-	{ K_SYSTEM, "zrn-cpuidle.service", "Processor idle states" },
-	{ K_SYSTEM, "ztos-panel-selfmask.service", "Display self mask" },
+	{ K_SYSTEM, "zrn-charge.service", "Charging", STARLTE },
+	{ K_SYSTEM, "zrn-cpuidle.service", "Processor idle states", STARLTE },
+	{ K_SYSTEM, "ztos-panel-selfmask.service", "Display self mask", STARLTE },
 	{ K_SYSTEM, "ztos-pstore-keep.service", "Crash log keeper" },
 	{ K_SYSTEM, "zboot-usb-gadget.service", "USB networking" },
 	{ K_SYSTEM, "ztos-update-check.timer", "Update check" },
@@ -96,6 +99,30 @@ static struct item *add(enum kind kind, const char *id, const char *title) {
 	return it;
 }
 
+/* The phone's codename, from its ztOSIAL manifest's [device] table; the
+ * Galaxy S9's (starlte) when there is none, as this app was written there. */
+static const char *codename(void) {
+	static char name[48];
+	if (name[0]) return name;
+	snprintf(name, sizeof(name), STARLTE);
+	FILE *f = fopen("/vendor/ztos/manifest.toml", "r");
+	char line[256];
+	bool in_device = false;
+	while (f && fgets(line, sizeof(line), f)) {
+		char *s = line, *q1, *q2;
+		while (*s == ' ' || *s == '\t') s++;
+		if (*s == '[') {
+			in_device = strncmp(s, "[device]", 8) == 0;
+		} else if (in_device && strncmp(s, "codename", 8) == 0 && (q1 = strchr(s, '"')) &&
+				(q2 = strchr(q1 + 1, '"'))) {
+			snprintf(name, sizeof(name), "%.*s", (int)(q2 - q1 - 1), q1 + 1);
+			break;
+		}
+	}
+	if (f) fclose(f);
+	return name;
+}
+
 static void load_list(void) {
 	FILE *f = fopen(COMPONENTS, "r");
 	char line[256];
@@ -122,8 +149,11 @@ static void load_list(void) {
 	if (f) {
 		fclose(f);
 	}
+	const char *phone = codename();
 	for (size_t i = 0; i < sizeof(extras) / sizeof(extras[0]); i++) {
-		add(extras[i].kind, extras[i].id, extras[i].title);
+		if (!extras[i].only || strcmp(extras[i].only, phone) == 0) {
+			add(extras[i].kind, extras[i].id, extras[i].title);
+		}
 	}
 }
 

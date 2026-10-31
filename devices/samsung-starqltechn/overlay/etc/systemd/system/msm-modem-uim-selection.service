@@ -11,6 +11,8 @@ Type=notify
 ExecStart=/usr/lib/msm-modem-uim-selection
 NotifyAccess=all
 TimeoutStartSec=120
+# done once the SIM application is picked: shown as done, not stopped
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target

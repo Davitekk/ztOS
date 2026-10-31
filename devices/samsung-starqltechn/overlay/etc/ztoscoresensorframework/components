@@ -7,7 +7,14 @@ unit|ztos-starq-firmware.service||Firmware
 unit|rmtfs.service||Modem: remote file system
 unit|tqftpserv.service||Modem: file server
 unit|ModemManager.service||Modem
+unit|msm-modem-uim-selection.service||Modem: SIM slot
+unit|ztos-starq-voice-domain.service||Modem: calls over 2G/3G
 unit|ztoscorenetworking.service||ztOSCoreNetworking: calls, messages, data
+unit|q6voiced.service||Call audio
+unit|hexagonrpcd-sdsp.service||Sensors: sensor DSP
+unit|iio-sensor-proxy.service||Sensors
 unit|bluetooth.service||Bluetooth
+unit|ztos-starq-bluetooth.service||Bluetooth controller and address
+unit|ztos-starq-rtc.service||Clock from the RTC
 unit|zrnperfd.service||Performance
 session|ztapps||App list

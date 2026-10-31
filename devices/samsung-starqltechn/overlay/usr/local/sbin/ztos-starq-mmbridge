@@ -12,7 +12,7 @@ Messaging and Settings work unchanged, and does it all through ModemManager
                                    "modem" down the shell's pipe at each change
   /run/ztoscorenetworking.ctl      airplane on|off, data on|off, sms|smse
                                    NUMBER TEXT, call NUMBER, answer, hangup,
-                                   speaker on|off, apn
+                                   speaker on|off, mute on|off, dtmf KEY, apn
   /var/lib/ztoscorenetworking/sms/log   in|out lines for Messaging
   /var/lib/ztoscorenetworking/calls     out|in|missed lines for Phone
   /etc/ztoscorenetworking/apn      the access point Settings writes (else the
@@ -54,6 +54,7 @@ status = {}
 written = None
 call = {'path': None, 'since': 0, 'answered': 0, 'incoming': False, 'number': ''}
 dialing = {'number': '', 'until': 0}     # a call asked for, until ModemManager lists it
+shell_after_publish = []                  # lines for the shell once the status is written
 seen_sms = set()
 user_runtime = None
 
@@ -189,9 +190,38 @@ def publish(s):
     os.replace(STATUS + '.new', STATUS)
     written = dict(s)
     tell_shell('modem\n')
+    while shell_after_publish:
+        tell_shell(shell_after_publish.pop(0))
 
 
 # ---- calls --------------------------------------------------------------------
+
+def amixer(name, value):
+    subprocess.run(['amixer', '-q', '-c', '0', 'cset', f'name={name}', value], capture_output=True, timeout=5)
+
+
+def call_route(speaker):
+    """The call on the earpiece or the bottom speaker, set on the MAX98512 pair
+    itself, as Samsung's own call-handset and call-speaker paths do: the
+    profile's Earpiece and Speaker are two PipeWire profiles, and callaudiod's
+    switch found no Speaker in the one in use. The amp takes the mode at once
+    (kernel/patch-max98512.py)."""
+    if speaker:
+        amixer('SPK Analog Left Gain', 'mute')
+        amixer('One Stop Mode', 'Mono Right')
+        amixer('SPK Analog Right Gain', '15dB')
+    else:
+        amixer('SPK Analog Right Gain', 'mute')
+        amixer('Rcv Digital Gain', '24')
+        amixer('One Stop Mode', 'Receiver Left')
+        amixer('SPK Analog Left Gain', '3dB')
+
+
+def call_mute(on):
+    """The call's microphones off or on (their decimators, as the profile sets them)."""
+    for dec in ('DEC7 Volume', 'DEC8 Volume'):
+        amixer(dec, '0' if on else '84')
+
 
 def callaudio(*args):
     """callaudiod (the user's session): the voice call's UCM verb and route."""
@@ -223,9 +253,12 @@ def call_status():
                         incoming=prop(path, MM + '.Call', 'Direction', 2) == 1,
                         number=prop(path, MM + '.Call', 'Number', '') or '', result='')
             if call['incoming']:
-                tell_shell('screen on\n')
-                tell_shell('call_screen\n')
+                # once the status says "incoming" (publish): Phone, started
+                # for it, quits at once when it reads no call
+                shell_after_publish.extend(['screen on\n', 'call_screen\n'])
             callaudio('-m', '1')          # the voice call verb: earpiece and the mics
+            call_route(speaker=False)
+            call_mute(False)
         if state == 4 and not call['answered']:
             call['answered'] = int(time.time())
         return {'call': CALL_NAMES[state], 'call_number': call['number'], 'call_result': ''}
@@ -237,6 +270,7 @@ def call_status():
             tell_shell(f"notify Phone|Missed call|{call['number'] or 'unknown'}\n")
         tell_shell('call_screen end\n')
         callaudio('-m', '0')
+        call_mute(False)
         call['path'] = None
         call['result'] = 'ended'
     return {'call': 'idle', 'call_number': '', 'call_result': call.get('result', '')}
@@ -426,6 +460,8 @@ def command(line):
             dialing.update(number=number, until=time.time() + 30)
             tick()
             callaudio('-m', '1')
+            call_route(speaker=False)
+            call_mute(False)
             try:
                 path = call_dbus(m, MM + '.Modem.Voice', 'CreateCall', '(a{sv})',
                                  ({'number': GLib.Variant('s', number)},)).unpack()[0]
@@ -439,7 +475,13 @@ def command(line):
         elif line == 'hangup' and m:
             call_dbus(m, MM + '.Modem.Voice', 'HangupAll')
         elif line in ('speaker on', 'speaker off'):
-            callaudio('-s', '1' if line == 'speaker on' else '0')
+            call_route(speaker=line == 'speaker on')
+        elif line in ('mute on', 'mute off'):
+            call_mute(line == 'mute on')
+        elif line.startswith('dtmf ') and call['path']:
+            key = line[5:6]
+            if key and key in '0123456789*#ABCD':
+                call_dbus(call['path'], MM + '.Call', 'SendDtmf', '(s)', (key,))
         elif line == 'apn' and os.path.exists(WANT_DATA):
             data(True, reapply=True)
     except (GLib.Error, OSError, subprocess.TimeoutExpired) as error:
