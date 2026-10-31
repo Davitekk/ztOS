@@ -28,15 +28,16 @@ notes say what. **Untested**: written, not yet tried with real use.
 | Power | Battery and charger | Works | MAX17042 gauge, MAX77705 charger |
 | Power | Clock across reboots | Works | The PMIC's RTC with a saved offset ([`ztos-starq-rtc`](overlay/usr/local/sbin/ztos-starq-rtc)); the AP may not set it |
 | Network | Wi-Fi | Works | BCM4361 B2 on PCIe (brcmfmac), the phone's own MAC address |
-| Network | Bluetooth | **BT_STATUS** | **BT_NOTES** |
+| Network | Bluetooth | Works | BCM4361 on UART6 at 3 Mbaud, the phone's own address; scanning, pairing and headphone audio tried |
 | Network | Mobile data (4G) | Works | ModemManager over QRTR; NetworkManager; the access point from the SIM's operator |
 | Network | USB networking to a computer | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM, registration, signal | Works | 4G; EFS (IMEI, calibration) is never written |
 | Modem | SMS | Works | Sending and receiving tried |
 | Modem | Calls | **CALL_STATUS** | **CALL_NOTES** |
-| Audio | Speaker | Works | WCD9340 and the MAX98512 pair, both speakers |
+| Audio | Speaker | Works | WCD9340 and the MAX98512 pair, both speakers; media through PipeWire |
 | Audio | Microphones | Works | Recorded and played back |
-| Audio | Headphones | Untested | In the profile (UCM) |
+| Audio | Wired headphones | Untested | In the profile (UCM) |
+| Audio | Headset microphone | Broken | Its DSP port (SLIMBUS_1_TX) does not start; left out of the profile |
 | Sensors | Accelerometer, light, proximity | Works | On the sensor DSP (SLPI), through hexagonrpcd, libssc and iio-sensor-proxy |
 | Storage | microSD | Works | |
 | Location | GPS | **GPS_STATUS** | **GPS_NOTES** |

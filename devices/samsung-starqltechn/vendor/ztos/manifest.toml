@@ -8,6 +8,15 @@ codename = "samsung-starqltechn"
 name = "Samsung Galaxy S9 (Snapdragon)"
 form_factor = "phone"
 scale = 2.5
+# what Settings shows (its processor, graphics, battery and about pages)
+model = "Samsung Galaxy S9 (SCV38 / SM-G9600, starqltechn)"
+soc = "Snapdragon 845"
+soc_long = "Qualcomm Snapdragon 845 (SDM845, 10nm LPP)"
+cpu_little = "Kryo 385 Silver"
+cpu_big = "Kryo 385 Gold"
+gpu = "Adreno 630"
+gpu_long = "Qualcomm Adreno 630 (freedreno)"
+battery = "3000 mAh Li-Ion"
 
 [gsi]
 min = "0.2.0"

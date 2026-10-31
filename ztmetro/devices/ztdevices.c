@@ -618,7 +618,9 @@ static bool exists(const char *path) {
 	return access(path, F_OK) == 0;
 }
 
-/* unit: the service or module behind it, whose page a tap opens.
+/* paths: any one of them there means it is (the Galaxy S9's, then the
+ * Snapdragon S9's, starqltechn). unit: the service or module behind it, whose
+ * page a tap opens.
  * radio: 1 Wi-Fi, 2 Bluetooth, switched on and off from the row. */
 static const struct device {
 	const char *what, *paths[4], *missing, *unit;
@@ -626,17 +628,17 @@ static const struct device {
 } devices[] = {
 	{ "Display", { "/sys/class/drm/card0-DSI-1", "/sys/class/drm/card1-DSI-1", "/sys/class/graphics/fb0" }, "no panel driver" },
 	{ "Display brightness", { "/sys/class/backlight/s9p-panel/brightness" }, "no backlight device: dimmed in software" },
-	{ "Graphics (Mali-G72)", { "/sys/class/devfreq/17500000.gpu", "/sys/bus/platform/drivers/panfrost" }, "no GPU driver" },
+	{ "Graphics", { "/sys/class/devfreq/17500000.gpu", "/sys/bus/platform/drivers/panfrost", "/sys/class/devfreq/5000000.gpu" }, "no GPU driver" },
 	{ "Touch screen", { "/sys/bus/i2c/drivers/s6sy761" }, "no touch driver" },
 	{ "Wi-Fi", { "/sys/class/net/wlp1s0", "/sys/class/net/wlan0" }, "no Wi-Fi interface", "NetworkManager.service", 1 },
 	{ "Bluetooth", { "/sys/class/bluetooth/hci0" }, "no controller", "zrn-bluetooth.service", 2 },
-	{ "Mobile network", { "/dev/umts_ipc0", "/sys/module/zrn_modem" }, "no modem driver", "ztoscorenetworking-modem.service" },
+	{ "Mobile network", { "/dev/umts_ipc0", "/sys/module/zrn_modem", "/sys/bus/platform/drivers/qcom-q6v5-mss/4080000.remoteproc" }, "no modem driver", "ztoscorenetworking-modem.service" },
 	{ "Battery", { "/sys/class/power_supply/max170xx_battery" }, "no fuel gauge" },
 	{ "Charger", { "/sys/class/power_supply/max77705-charger" }, "no charger driver", "zrn-charge.service" },
 	{ "Sound", { "/proc/asound/ZrnAbox", "/proc/asound/card0" }, "no sound card", "ztoscirrusaudio.service" },
-	{ "Sensors", { "/sys/module/zrn_bbd", "/run/ztoscsf-sensors/light" }, "no sensor hub", "ztoscsf-sensord.service" },
-	{ "Vibration", { "/sys/module/zrn_haptic" }, "no haptics driver", "zrn_haptic" },
-	{ "Notification light", { "/sys/module/zrn_led" }, "no LED driver", "zrn_led" },
+	{ "Sensors", { "/sys/module/zrn_bbd", "/run/ztoscsf-sensors/light", "/dev/fastrpc-sdsp" }, "no sensor hub", "ztoscsf-sensord.service" },
+	{ "Vibration", { "/sys/module/zrn_haptic", "/sys/bus/platform/drivers/max77693-haptic" }, "no haptics driver", "zrn_haptic" },
+	{ "Notification light", { "/sys/module/zrn_led", "/sys/class/leds/rgb:status" }, "no LED driver", "zrn_led" },
 	{ "Flashlight", { "/sys/class/leds/white:torch" }, "no flash driver" },
 	{ "Camera", { "/dev/video0" }, "not supported yet" },
 	{ "Fingerprint", { NULL }, "not supported: held by the secure world" },

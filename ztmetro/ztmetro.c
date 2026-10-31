@@ -4218,7 +4218,12 @@ static bool wifi_up(void) {
 		if (entry->d_name[0] != 'w') {
 			continue;
 		}
+		/* a wireless interface, not waydroid0 (Waydroid's bridge, always up) */
 		char path[300], state[16] = "";
+		snprintf(path, sizeof(path), "/sys/class/net/%s/wireless", entry->d_name);
+		if (access(path, F_OK) != 0) {
+			continue;
+		}
 		snprintf(path, sizeof(path), "/sys/class/net/%s/carrier", entry->d_name);
 		FILE *f = fopen(path, "r");
 		if (f) {
@@ -4930,12 +4935,18 @@ static int net_tick(void *data) {
 	}
 	/* the interface in use: Wi-Fi if it is up, else the mobile one */
 	char path[320], name[64] = "rmnet0";
-	if (wifi_bars(server) >= 0) {
+	bool wifi = wifi_bars(server) >= 0;
+	if (wifi || access("/sys/class/net/rmnet0", F_OK) != 0) {
+		/* Wi-Fi: a wireless interface (not waydroid0); mobile without
+		 * rmnet0 (the Exynos modem's): ModemManager's link, qmapmux* or wwan* */
 		DIR *dir = opendir("/sys/class/net");
 		struct dirent *entry;
 		while (dir && (entry = readdir(dir))) {
-			if (entry->d_name[0] == 'w') {
+			snprintf(path, sizeof(path), "/sys/class/net/%s/wireless", entry->d_name);
+			if (wifi ? access(path, F_OK) == 0 :
+					strncmp(entry->d_name, "qmapmux", 7) == 0 || strncmp(entry->d_name, "wwan", 4) == 0) {
 				snprintf(name, sizeof(name), "%s", entry->d_name);
+				break;
 			}
 		}
 		if (dir) {
