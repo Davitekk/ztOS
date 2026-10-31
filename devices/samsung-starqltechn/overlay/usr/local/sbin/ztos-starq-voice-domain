@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+"""Calls over CS (2G/3G), not VoLTE: the modem's voice domain preference.
+
+The modem starts with "PS preferred" (VoLTE first) and tells the network so
+when it attaches on LTE. VoLTE needs Qualcomm's IMS stack, which is Android's,
+so the phone never registers to IMS; but a network with VoLTE then sends
+incoming calls there, cannot reach the phone, and they go to voicemail
+(WindTre: straight to voicemail, then a "you were called" SMS). Outgoing calls
+fall back to 2G/3G (CSFB) and work. With "CS only" the network delivers
+incoming calls through CSFB too.
+
+Set for this power cycle only, once at each start: the modem's EFS is never
+written (rmtfs runs read-only), so a permanent setting could not be kept
+anyway. Through QMI NAS on the modem's QRTR node, beside ModemManager.
+"""
+import sys
+
+import gi
+gi.require_version('Qmi', '1.0')
+gi.require_version('Qrtr', '1.0')
+from gi.repository import GLib, Qmi, Qrtr  # noqa: E402
+
+MODEM_NODE = 0          # the modem's QRTR node (qmicli's qrtr://0)
+loop = GLib.MainLoop()
+result = {'rc': 1}
+
+
+def done(message, rc):
+    print(f'ztos-starq-voice-domain: {message}', file=sys.stderr if rc else sys.stdout)
+    result['rc'] = rc
+    loop.quit()
+
+
+def guard(step):
+    def wrapped(*args):
+        try:
+            step(*args)
+        except GLib.Error as error:
+            done(f'{step.__name__}: {error.message}', 1)
+    return wrapped
+
+
+@guard
+def on_bus(_source, res):
+    bus = Qrtr.Bus.new_finish(res)
+    bus.wait_for_node(MODEM_NODE, 30000, None, on_node)
+
+
+@guard
+def on_node(bus, res):
+    node = bus.wait_for_node_finish(res)
+    Qmi.Device.new_from_node(node, None, on_device)
+
+
+@guard
+def on_device(_source, res):
+    device = Qmi.Device.new_from_node_finish(res)
+    device.open(Qmi.DeviceOpenFlags.NONE, 15, None, on_open)
+
+
+@guard
+def on_open(device, res):
+    device.open_finish(res)
+    device.allocate_client(Qmi.Service.NAS, Qmi.CID_NONE, 15, None, on_client)
+
+
+@guard
+def on_client(device, res):
+    client = device.allocate_client_finish(res)
+    message = Qmi.MessageNasSetSystemSelectionPreferenceInput.new()
+    message.set_voice_domain_preference(Qmi.NasVoiceDomainPreference.CS_ONLY)
+    message.set_change_duration(Qmi.NasChangeDuration.POWER_CYCLE)
+    client.set_system_selection_preference(message, 15, None, on_set, device)
+
+
+@guard
+def on_set(client, res, device):
+    client.set_system_selection_preference_finish(res).get_result()
+    device.release_client(client, Qmi.DeviceReleaseClientFlags.RELEASE_CID, 10, None, None)
+    done('voice domain: CS only (calls over 2G/3G, not VoLTE)', 0)
+
+
+Qrtr.Bus.new(5000, None, on_bus)
+GLib.timeout_add_seconds(60, lambda: done('no answer from the modem', 1))
+loop.run()
+sys.exit(result['rc'])

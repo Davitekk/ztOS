@@ -1,0 +1,15 @@
+[Unit]
+Description=Galaxy S9 (Snapdragon): calls over CS (2G/3G), not VoLTE
+Documentation=file:///usr/local/sbin/ztos-starq-voice-domain
+After=rmtfs.service ModemManager.service
+Wants=ModemManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ztos-starq-voice-domain
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

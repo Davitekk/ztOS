@@ -53,6 +53,7 @@ bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
 status = {}
 written = None
 call = {'path': None, 'since': 0, 'answered': 0, 'incoming': False, 'number': ''}
+dialing = {'number': '', 'until': 0}     # a call asked for, until ModemManager lists it
 seen_sms = set()
 user_runtime = None
 
@@ -212,7 +213,10 @@ def call_status():
         if state in CALL_NAMES:
             live = (path, state)
             break
+    if not live and dialing['until'] > time.time():     # dialled, not listed yet
+        return {'call': 'dialing', 'call_number': dialing['number'], 'call_result': ''}
     if live:
+        dialing['until'] = 0
         path, state = live
         if call['path'] != path:          # a new call
             call.update(path=path, since=int(time.time()), answered=0,
@@ -416,9 +420,20 @@ def command(line):
             sms_out(number, unescape(text) if line.startswith('smse ') else text)
         elif line.startswith('call ') and m and not call['path']:
             number = ''.join(c for c in line[5:] if c in '0123456789+*#')
-            path = call_dbus(m, MM + '.Modem.Voice', 'CreateCall', '(a{sv})',
-                             ({'number': GLib.Variant('s', number)},)).unpack()[0]
-            call_dbus(path, MM + '.Call', 'Start')
+            # "dialing" at once: Phone reads "idle" before ModemManager lists
+            # the call as a call that ended; and the call's sound route first,
+            # so the voice path starts on the earpiece
+            dialing.update(number=number, until=time.time() + 30)
+            tick()
+            callaudio('-m', '1')
+            try:
+                path = call_dbus(m, MM + '.Modem.Voice', 'CreateCall', '(a{sv})',
+                                 ({'number': GLib.Variant('s', number)},)).unpack()[0]
+                call_dbus(path, MM + '.Call', 'Start')
+            except GLib.Error:
+                dialing['until'] = 0
+                callaudio('-m', '0')
+                raise
         elif line == 'answer' and call['path']:
             call_dbus(call['path'], MM + '.Call', 'Accept')
         elif line == 'hangup' and m:
