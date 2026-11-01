@@ -9848,8 +9848,16 @@ static void perf_tell(const char *command) {
  * drawing never waits on PipeWire. */
 #define OUTPUTS_SH \
 	"d=$(pactl get-default-sink 2>/dev/null); f=$XDG_RUNTIME_DIR/ztos-outputs; " \
-	"pactl list sinks 2>/dev/null | awk -v d=\"$d\" '/^\\tName:/ { n = $2 } " \
-	"/^\\tDescription:/ { sub(/^\\tDescription: /, \"\"); print (n == d ? \"*\" : \"-\") \"|\" n \"|\" $0 }' " \
+	"pactl list sinks 2>/dev/null | awk -v d=\"$d\" " \
+	/* a smart filter (a device's effects, as the speakers' limiter) is no output \
+	 * of its own: left out, its device the current one when it is the default */ \
+	"'function keep() { if (n != \"\") { k++; N[k] = n; D[k] = desc; S[k] = smart; T[k] = tgt } } " \
+	"/^Sink #/ { keep(); n = \"\"; smart = 0; tgt = \"\" } " \
+	"/^\\tName:/ { n = $2 } " \
+	"/^\\tDescription:/ { desc = $0; sub(/^\\tDescription: /, \"\", desc) } " \
+	"/^\\t\\tfilter\\.smart = \"true\"/ { smart = 1 } " \
+	"/^\\t\\tfilter\\.smart\\.target = / { tgt = $0; sub(/.*node\\.name = \\\\\"/, \"\", tgt); sub(/\\\\\".*/, \"\", tgt) } " \
+	"END { keep(); cur = d; for (i = 1; i <= k; i++) if (S[i] && N[i] == d) cur = T[i]; for (i = 1; i <= k; i++) if (!S[i]) print (N[i] == cur ? \"*\" : \"-\") \"|\" N[i] \"|\" D[i] }' " \
 	"> \"$f.new\" && mv \"$f.new\" \"$f\""
 static void outputs_refresh(void) {
 	run_detached("sh", "-c", OUTPUTS_SH, NULL);
