@@ -4,7 +4,7 @@ ztoscorenetworkingd speaks AT commands to Samsung's modem; this phone's
 Qualcomm modem is ModemManager's (QRTR). This daemon keeps
 ztoscorenetworkingd's interface exactly, so the shell's status bar, Phone,
 Messaging and Settings work unchanged, and does it all through ModemManager
-(and NetworkManager for mobile data, callaudiod for where a call is heard):
+(and NetworkManager for mobile data, PipeWire's card profiles for a call's sound):
 
   /run/ztoscorenetworking/status   key=value lines: sim, operator, bars (0-5),
                                    registered, tech, airplane, data, data_on,
@@ -205,14 +205,15 @@ def amixer(name, value):
 # at +26 dB (84 is 0 dB); the earpiece at -3 dB, stock's "handset-lf" (its
 # "handset" -10 dB, 24, was hard to hear).
 CALL_MIC_GAIN = '110'
+MIC_GAIN = '84'
 CALL_EARPIECE_GAIN = '52'
 
 
 def call_route(speaker):
     """The call on the earpiece or the bottom speaker, set on the MAX98512 pair
     itself, as Samsung's own call-handset and call-speaker paths do: the
-    profile's Earpiece and Speaker are two PipeWire profiles, and callaudiod's
-    switch found no Speaker in the one in use. The amp takes the mode at once
+    profile's Earpiece and Speaker are two PipeWire profiles, and a switch
+    between them found no Speaker in the one in use. The amp takes the mode at once
     (kernel/patch-max98512.py)."""
     if speaker:
         amixer('SPK Analog Left Gain', 'mute')
@@ -232,47 +233,66 @@ def call_mute(on):
 
 
 def user_run(*args):
-    """A command in the user's session (their D-Bus and PipeWire); its output."""
+    """A command in the user's session (their D-Bus and PipeWire); its output,
+    '' when it fails: a call's setup goes on without it."""
     for uid in range(1000, 1010):
         bus_path = f'/run/user/{uid}/bus'
         if os.path.exists(bus_path):
             name = subprocess.run(['id', '-nu', str(uid)], capture_output=True, text=True).stdout.strip()
-            return subprocess.run(['runuser', '-u', name, '--', 'env', f'DBUS_SESSION_BUS_ADDRESS=unix:path={bus_path}',
-                                   f'XDG_RUNTIME_DIR=/run/user/{uid}', *args],
-                                  capture_output=True, text=True, timeout=10).stdout
+            try:
+                return subprocess.run(['runuser', '-u', name, '--', 'env',
+                                       f'DBUS_SESSION_BUS_ADDRESS=unix:path={bus_path}',
+                                       f'XDG_RUNTIME_DIR=/run/user/{uid}', *args],
+                                      capture_output=True, text=True, timeout=10).stdout
+            except subprocess.SubprocessError as e:
+                log(f'{args[0]}: {e}')
+                return ''
     return ''
 
 
-def callaudio(*args):
-    """callaudiod (the user's session): the voice call's UCM verb and route."""
-    user_run('callaudiocli', *args)
+# A call's sound: the sound card's call profile (VoiceCall.conf: the voice
+# path, earpiece and mics) for the call, then HiFi again and the output media
+# played on before it. Done here, in this order, rather than by callaudiod: it
+# was slow to start (a call's setup timed out behind it), and back on HiFi it
+# made an output of its own choosing the default, the headphones, also with
+# none plugged in.
+CARD = 'alsa_card.platform-sound'
+CALL_PROFILE = 'Voice Call (Earpiece, Handset, Headphones)'
+call_audio = {'on': False, 'sink': ''}
 
 
-# The output media played on before the call: back to the sound card's HiFi
-# profile after it, callaudiod makes an output of its own choosing the
-# default, the headphones (also with none plugged in).
-media_output = {'sink': ''}
-
-
-def keep_media_output():
+def call_audio_on():
+    """Once a call: the output media plays on kept, the call profile, the route and gains."""
+    if call_audio['on']:
+        return
+    call_audio['on'] = True
     sink = user_run('pactl', 'get-default-sink').strip()
-    media_output['sink'] = sink if '.HiFi__' in sink or not sink.startswith('alsa_output.') else ''
+    call_audio['sink'] = sink if '.HiFi__' in sink or not sink.startswith('alsa_output.') else ''
+    user_run('pactl', 'set-card-profile', CARD, CALL_PROFILE)
+    call_route(speaker=False)
+    call_mute(False)
 
 
-def restore_media_output():
-    sink, media_output['sink'] = media_output['sink'], ''
+def call_audio_off():
+    """After a call: HiFi, and the output media played on before it."""
+    if not call_audio['on']:
+        return
+    call_audio['on'] = False
+    user_run('pactl', 'set-card-profile', CARD, 'HiFi')
+    for dec in ('DEC7 Volume', 'DEC8 Volume'):     # recordings at 0 dB, as HiFi's
+        amixer(dec, MIC_GAIN)
+    sink = call_audio['sink']
     if not sink:
         return
 
     def again():
-        # callaudiod's own choice comes a moment after the profile's switch
-        for wait in (0.5, 1.0, 2.0):
+        # the HiFi sinks (and the speakers' filter on them) come back a moment
+        # after the profile's switch
+        for wait in (0.3, 0.7, 1.5, 3.0):
             time.sleep(wait)
-            try:
-                if user_run('pactl', 'get-default-sink').strip() != sink:
-                    user_run('pactl', 'set-default-sink', sink)
-            except subprocess.SubprocessError:
-                pass
+            if user_run('pactl', 'get-default-sink').strip() == sink:
+                return
+            user_run('pactl', 'set-default-sink', sink)
     threading.Thread(target=again, daemon=True).start()
 
 
@@ -298,10 +318,7 @@ def call_status():
                 # once the status says "incoming" (publish): Phone, started
                 # for it, quits at once when it reads no call
                 shell_after_publish.extend(['screen on\n', 'call_screen\n'])
-            keep_media_output()
-            callaudio('-m', '1')          # the voice call verb: earpiece and the mics
-            call_route(speaker=False)
-            call_mute(False)
+            call_audio_on()               # (already, for a call dialled here)
         if state == 4 and not call['answered']:
             call['answered'] = int(time.time())
         return {'call': CALL_NAMES[state], 'call_number': call['number'], 'call_result': ''}
@@ -312,9 +329,7 @@ def call_status():
         if kind == 'missed':
             tell_shell(f"notify Phone|Missed call|{call['number'] or 'unknown'}\n")
         tell_shell('call_screen end\n')
-        callaudio('-m', '0')
-        restore_media_output()
-        call_mute(False)
+        call_audio_off()
         call['path'] = None
         call['result'] = 'ended'
     return {'call': 'idle', 'call_number': '', 'call_result': call.get('result', '')}
@@ -503,16 +518,14 @@ def command(line):
             # so the voice path starts on the earpiece
             dialing.update(number=number, until=time.time() + 30)
             tick()
-            callaudio('-m', '1')
-            call_route(speaker=False)
-            call_mute(False)
+            call_audio_on()
             try:
                 path = call_dbus(m, MM + '.Modem.Voice', 'CreateCall', '(a{sv})',
                                  ({'number': GLib.Variant('s', number)},)).unpack()[0]
                 call_dbus(path, MM + '.Call', 'Start')
             except GLib.Error:
                 dialing['until'] = 0
-                callaudio('-m', '0')
+                call_audio_off()
                 raise
         elif line == 'answer' and call['path']:
             call_dbus(call['path'], MM + '.Call', 'Accept')
