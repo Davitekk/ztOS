@@ -58,6 +58,9 @@ notes say what. **Untested**: written, not yet tried with real use.
 
 ## Installing
 
+Step by step, from the tools to the first start, upgrades and going back:
+[**INSTALL.md**](INSTALL.md). In short:
+
 > **This erases the phone.** Everything in its user data is replaced. Its
 > identity (IMEI, modem calibration, Wi-Fi and Bluetooth addresses) and its
 > sensor calibration are never written, and are backed up first anyway.
@@ -77,7 +80,7 @@ notes say what. **Untested**: written, not yet tried with real use.
    In TWRP, *Cancel* the password question and *Keep Read Only*.
 3. **Build and install.**
 
-On **Linux** (Arch, or anything with the packages of [`docker/Dockerfile`](docker/Dockerfile)):
+On **Linux** (Arch, or anything with the packages of [`docker/Dockerfile`](docker/Dockerfile); the installer's own phone steps are not yet tried on this phone, the Docker way below is):
 
 ```sh
 devices/samsung-starqltechn/kernel/build-kernel.sh
