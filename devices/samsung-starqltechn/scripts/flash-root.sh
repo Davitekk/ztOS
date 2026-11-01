@@ -47,8 +47,9 @@ PSIZE=$(sh blockdev --getsize64 "$BY")
 [ "$PSIZE" -ge $((SIZE + 1048576)) ] || { echo "USERDATA ($PSIZE bytes) is too small for $SIZE" >&2; exit 1; }
 echo "image $IMG: $SIZE bytes, $N chunks of $CHUNK MiB -> USERDATA ($NODE, $PSIZE bytes)"
 
-# TWRP must not have USERDATA mounted while it is written
-sh "umount /data 2>/dev/null; umount /sdcard 2>/dev/null; grep -q '^$NODE ' /proc/mounts && echo mounted || true" |
+# TWRP must not have USERDATA mounted while it is written (/proc/mounts names
+# it by its by-name link when TWRP mounted a ztOS root at /data)
+sh "umount /sdcard 2>/dev/null; umount /data 2>/dev/null; grep -qE '^($NODE|$BY) ' /proc/mounts && echo mounted || true" |
 	grep -q mounted && { echo "USERDATA is still mounted in TWRP: unmount Data under Mount, then run this again" >&2; exit 1; }
 
 part_hash() {   # sha256 of chunk $1 as the phone reads it
