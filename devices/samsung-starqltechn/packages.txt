@@ -11,6 +11,9 @@ linux-firmware-qcom
 
 # sound: ALSA's UCM, to which the layer adds this phone's profile
 alsa-ucm-conf
+# the speakers' limiter (fast_lookahead_limiter, in PipeWire's filter chain:
+# overlay/etc/pipewire/pipewire.conf.d/60-ztos-starq-speakers.conf)
+swh-plugins
 
 # the modem over QRTR (ModemManager, qmicli for msm-modem-uim-selection)
 modemmanager
