@@ -1,0 +1,35 @@
+#!/bin/sh
+# The call's uplink: the phone's mics into the DSP's voice path.
+#
+# q6voiced opens the voice PCM (VoiceMMode1) for a call and only prepares it,
+# which starts the call on the DSP and the DSP's SLIMBUS_0_TX port; but the
+# codec (wcd934x) turns on its SLIMbus channels for TX7/TX8, the mics, only
+# when a stream on that port is started, so the other end heard nothing.
+# While the voice PCM is open, this keeps a capture going on another
+# front end of the same port (MultiMedia6, hw:<card>,5, routed by the
+# VoiceCall profile) and throws it away: that starts the mics' channels.
+set -u
+. /usr/share/q6voiced/q6voiced.conf
+VOICE=/proc/asound/card$q6voice_card/pcm${q6voice_device}c/sub0/status
+PCM=hw:$q6voice_card,5
+pid=
+call=
+
+stop() { [ -z "$pid" ] || { kill "$pid" 2> /dev/null; wait "$pid" 2> /dev/null; pid=; }; }
+trap 'stop; exit 0' TERM INT
+
+while :; do
+	if [ -r "$VOICE" ] && [ "$(head -1 "$VOICE")" != closed ]; then
+		[ -n "$call" ] || { call=1; echo "ztos-starq-call-uplink: call: mics on ($PCM)"; }
+		# (again if it ended: the profile may not have routed it yet)
+		if [ -z "$pid" ] || ! kill -0 "$pid" 2> /dev/null; then
+			arecord -q -D "$PCM" -c 2 -r 48000 -f S16_LE -t raw /dev/null 2> /dev/null &
+			pid=$!
+		fi
+	elif [ -n "$call" ]; then
+		stop
+		call=
+		echo "ztos-starq-call-uplink: call over: mics off"
+	fi
+	sleep 0.5
+done

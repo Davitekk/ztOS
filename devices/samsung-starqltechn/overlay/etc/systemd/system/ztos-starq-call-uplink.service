@@ -1,0 +1,14 @@
+[Unit]
+Description=Galaxy S9 (Snapdragon): the phone's mics into calls
+Documentation=file:///usr/local/sbin/ztos-starq-call-uplink
+After=q6voiced.service
+
+[Service]
+ExecStart=/usr/local/sbin/ztos-starq-call-uplink
+Restart=always
+RestartSec=2
+DynamicUser=yes
+Group=audio
+
+[Install]
+WantedBy=multi-user.target

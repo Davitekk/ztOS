@@ -61,5 +61,5 @@ fi
 # NetworkManager leaves usb0 alone), so the computer gets 172.16.42.2; the
 # USB serial port has a login (COM port on Windows, /dev/ttyACM0 on Linux)
 DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0
-	ztos-starq-firmware rmtfs tqftpserv msm-modem-uim-selection ModemManager ztoscorenetworking 81voltd q6voiced
+	ztos-starq-firmware rmtfs tqftpserv msm-modem-uim-selection ModemManager ztoscorenetworking 81voltd q6voiced ztos-starq-call-uplink
 	hexagonrpcd-sdsp iio-sensor-proxy bluetooth ztos-starq-bluetooth ztos-starq-rtc ztos-starq-rtc-save.timer ztos-starq-charge-led ztos-starq-voice-domain"

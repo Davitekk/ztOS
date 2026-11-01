@@ -33,7 +33,7 @@ notes say what. **Untested**: written, not yet tried with real use.
 | Network | USB networking to a computer | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM, registration, signal | Works | 4G; EFS (IMEI, calibration) is never written |
 | Modem | SMS | Works | Sending and receiving tried |
-| Modem | Calls | Partial | Placing and receiving calls, earpiece and speakerphone, keypad tones; over 2G/3G (CSFB), as VoLTE needs Android's IMS stack. Voice to the other end not tested yet since the microphones work |
+| Modem | Calls | Works | Placing and receiving calls with voice both ways, earpiece and speakerphone, mute, keypad tones; over 2G/3G (CSFB), as VoLTE needs Android's IMS stack. The mics reach the call through [`ztos-starq-call-uplink`](overlay/usr/local/sbin/ztos-starq-call-uplink) (q6voiced only prepares the voice PCM, and the codec's SLIMbus mic channels start with a started stream); without stock's DSP calibration the call's gains are the profile's: mics +26 dB, earpiece -3 dB |
 | Audio | Speaker | Partial | WCD9340 and the MAX98512 pair, both speakers; media through PipeWire. Quieter than stock at full volume |
 | Audio | Microphones | Works | Both digital mics record (bottom: DMIC0, top: DMIC2). What made them work: the codec's DMIC1 pins in the driven mode Samsung's audio HAL sets at boot ("DMIC1_CLK/DATA_PIN_MODE 0", [`patch-wcd934x.py`](kernel/patch-wcd934x.py)). Raw level, as stock's unprocessed path; stock adds +7 dB (DEC7/DEC8 Volume 91) for recordings |
 | Audio | Wired headphones | Untested | In the profile (UCM) |

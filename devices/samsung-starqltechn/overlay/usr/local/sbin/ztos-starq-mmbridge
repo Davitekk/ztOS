@@ -200,6 +200,14 @@ def amixer(name, value):
     subprocess.run(['amixer', '-q', '-c', '0', 'cset', f'name={name}', value], capture_output=True, timeout=5)
 
 
+# The call's gains, as the profile (VoiceCall.conf) sets them: without
+# stock's DSP calibration the call has none of its own. The mics' decimators
+# at +26 dB (84 is 0 dB); the earpiece at -3 dB, stock's "handset-lf" (its
+# "handset" -10 dB, 24, was hard to hear).
+CALL_MIC_GAIN = '110'
+CALL_EARPIECE_GAIN = '52'
+
+
 def call_route(speaker):
     """The call on the earpiece or the bottom speaker, set on the MAX98512 pair
     itself, as Samsung's own call-handset and call-speaker paths do: the
@@ -212,15 +220,15 @@ def call_route(speaker):
         amixer('SPK Analog Right Gain', '15dB')
     else:
         amixer('SPK Analog Right Gain', 'mute')
-        amixer('Rcv Digital Gain', '24')
+        amixer('Rcv Digital Gain', CALL_EARPIECE_GAIN)
         amixer('One Stop Mode', 'Receiver Left')
         amixer('SPK Analog Left Gain', '3dB')
 
 
 def call_mute(on):
-    """The call's microphones off or on (their decimators, as the profile sets them)."""
+    """The call's microphones off or on (their decimators, at the call's gain)."""
     for dec in ('DEC7 Volume', 'DEC8 Volume'):
-        amixer(dec, '0' if on else '84')
+        amixer(dec, '0' if on else CALL_MIC_GAIN)
 
 
 def callaudio(*args):
