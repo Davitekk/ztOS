@@ -77,6 +77,11 @@ if [ "${ZTOS_REGMAP_WRITE:-}" = 1 ]; then
 	# (lockdown "integrity" refuses writable debugfs files)
 	sed -i -e '/^CONFIG_LOCK_DOWN_KERNEL_FORCE_/d' -e '/LOCK_DOWN_KERNEL_FORCE_NONE/d' "$OUT/.config"
 	echo "CONFIG_LOCK_DOWN_KERNEL_FORCE_NONE=y" >> "$OUT/.config"
+	# so that it boots a system built with the release kernel: that one's
+	# modules carry BTF made against the release vmlinux, which this one
+	# refuses (-22) otherwise, and with them sound, Wi-Fi and the modem
+	sed -i '/MODULE_ALLOW_BTF_MISMATCH/d' "$OUT/.config"
+	echo "CONFIG_MODULE_ALLOW_BTF_MISMATCH=y" >> "$OUT/.config"
 fi
 "${M[@]}" olddefconfig > /dev/null
 
