@@ -2,6 +2,8 @@
 # the phone's stock firmware and EFS backups (IMEI, calibration)
 stock/
 .claude/
+# the phone's data saved for an upgrade (Wi-Fi passwords, messages)
+backups/
 
 # Builds, inputs and outputs (made again by the scripts and the installer)
 build/

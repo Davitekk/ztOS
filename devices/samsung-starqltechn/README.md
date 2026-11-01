@@ -108,6 +108,32 @@ carries on. `flash.sh` reads BOOT back after writing it.
 
 The first start takes a minute while the system grows to fill the storage.
 
+## Upgrading
+
+The Updates app (`ztos-update`) brings package updates. A new ztOS version
+is a new root image, as its own parts are built into the image, and writing
+it replaces USERDATA. [`scripts/upgrade.sh`](scripts/upgrade.sh) keeps the
+user's data across it: every home (settings, files, Android's apps), Wi-Fi
+networks, Bluetooth pairings, calls and messages, the access point, the SSH
+host keys, the time zone and the password. Build the new version as above,
+with the same `--user`, then:
+
+```sh
+devices/samsung-starqltechn/scripts/upgrade.sh save
+# in TWRP:
+devices/samsung-starqltechn/scripts/flash-root.sh build/ztos/starqltechn/root-chunks
+devices/samsung-starqltechn/scripts/flash.sh BOOT build/ztos/starqltechn/stage/boot/ztos-starqltechn-boot.img
+adb reboot
+# once the new system shows its lock screen:
+devices/samsung-starqltechn/scripts/upgrade.sh restore backups/starqltechn/ztos-data-<date>.tar.gz
+```
+
+`save` runs on the old system and `restore` on the new one, both over the
+USB network; restore reboots the phone. The saved file holds Wi-Fi
+passwords and messages, and stays in `backups/` (not in the repository).
+Packages installed with `pacman` are not carried over: restore lists them,
+to install again.
+
 ## Reaching the phone
 
 - **USB serial:** a login on the phone's USB serial port: a COM port on
