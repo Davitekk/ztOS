@@ -16,7 +16,8 @@
 #
 # Kept: every home (settings, files, Android's apps and their data), Wi-Fi
 # networks, Bluetooth pairings, calls and messages, the access point, the
-# learned performance and sensor state, the SSH host keys, the time zone and
+# learned performance and sensor state, the clock's RTC offset, the SSH host
+# keys, the time zone and
 # the user's password. Waydroid's images too, unless the new system already
 # has its own. Not kept: packages installed with pacman (listed at the end,
 # to install again) and the rest of the system, which is the new version's.
@@ -49,6 +50,7 @@ var/lib/zrnperfd
 var/lib/ztoscsf-sensord
 var/lib/zrn-sleep
 var/lib/zrn-power
+var/lib/ztos-starq
 var/lib/waydroid
 etc/localtime
 etc/ssh/ssh_host_*'
@@ -107,7 +109,7 @@ if [ -e /var/lib/waydroid/images/system.img ]; then
 	set -- "$@" --exclude=var/lib/waydroid
 	echo "phone: keeping the new system'"'"'s Waydroid images" >&2
 fi
-tar -xzpf "$a" -C / --numeric-owner --xattrs --overwrite "$@"
+tar -xzpf "$a" -C / --numeric-owner --xattrs --overwrite --warning=no-timestamp "$@"
 h=$(cat "$m/ztos-upgrade/password")
 case "$h" in
 ""|"!"*|"*"*) ;;
