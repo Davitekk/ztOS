@@ -22,7 +22,9 @@
    mics still delivered only zeros. Both tables are applied here, for this
    board, except the two CPR voltages (written by another mechanism there)
    and what mainline already sets; addresses from Qualcomm's
-   wcd934x_registers.h, as mainline's header has not all the names.
+   wcd934x_registers.h, as mainline's header has not all the names. Last,
+   the one capture setting Samsung's audio HAL makes at boot that mainline
+   has no control for: the main mic's DMIC1 pins in their driven mode.
 
 Asserted, so a changed upstream file fails instead of silently building
 without it. Takes the kernel source directory as its only argument.
@@ -120,6 +122,12 @@ QCOM_INIT = [
     (0x0671, 0xff, 0xfa, "MICB3_TEST_CTL_1"),
     (0x0674, 0xff, 0xfa, "MICB4_TEST_CTL_1"),
     (0x0a3e, 0xff, 0x4d, "CDC_TX0_TX_PATH_SEC7"),
+    # Samsung's own default (mixer_paths_tavil.xml, "DMIC state"): the main
+    # mic's pins in their driven mode, DMIC1_CLK/DATA_PIN_MODE 0, which in
+    # tavil_dmic_pin_mode_put() sets their output enables and PINCFG 0
+    (0x8033, 0x06, 0x06, "TEST_DEBUG_PIN_CTL_OE_2"),
+    (0x8015, 0x1f, 0x00, "TLMM_DMIC1_CLK_PINCFG"),
+    (0x8016, 0x1f, 0x00, "TLMM_DMIC1_DATA_PINCFG"),
 ]
 table = "".join(f"\t\t{{ 0x{r:04x}, 0x{m:02x}, 0x{v:02x} }},\t/* {n} */\n" for r, m, v, n in QCOM_INIT)
 old = ("\t/* Take DMICs out of reset */\n"
