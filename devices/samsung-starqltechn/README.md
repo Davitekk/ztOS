@@ -33,9 +33,9 @@ notes say what. **Untested**: written, not yet tried with real use.
 | Network | USB networking to a computer | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM, registration, signal | Works | 4G; EFS (IMEI, calibration) is never written |
 | Modem | SMS | Works | Sending and receiving tried |
-| Modem | Calls | Partial | Placing and receiving calls, earpiece and speakerphone, keypad tones; over 2G/3G (CSFB), as VoLTE needs Android's IMS stack. The other end hears nothing yet (microphones) |
+| Modem | Calls | Partial | Placing and receiving calls, earpiece and speakerphone, keypad tones; over 2G/3G (CSFB), as VoLTE needs Android's IMS stack. Voice to the other end not tested yet since the microphones work |
 | Audio | Speaker | Partial | WCD9340 and the MAX98512 pair, both speakers; media through PipeWire. Quieter than stock at full volume |
-| Audio | Microphones | Broken | Both digital mics' data lines stay still: a capture is a start-up click and then silence. Read straight from the chip during a capture, bias (1.8 V), mic bias, DMIC clocks (2.4 MHz) and decimators are on, and routing, supplies and register defaults match stock's (SM-G9600 mixer paths and device tree); the analog side works. Under investigation |
+| Audio | Microphones | Works | Both digital mics record (bottom: DMIC0, top: DMIC2). What made them work: the codec's DMIC1 pins in the driven mode Samsung's audio HAL sets at boot ("DMIC1_CLK/DATA_PIN_MODE 0", [`patch-wcd934x.py`](kernel/patch-wcd934x.py)). Raw level, as stock's unprocessed path; stock adds +7 dB (DEC7/DEC8 Volume 91) for recordings |
 | Audio | Wired headphones | Untested | In the profile (UCM) |
 | Audio | Headset microphone | Broken | Its DSP port (SLIMBUS_1_TX) does not start; left out of the profile |
 | Sensors | Accelerometer, light, proximity | Works | On the sensor DSP (SLPI), through hexagonrpcd, libssc and iio-sensor-proxy |
