@@ -1,0 +1,7 @@
+# ztOSCoreSensorFramework on the Lumia 950: the hardware support this phone
+# brings itself, in place of the Exynos S9's list (its modules, Cirrus audio,
+# Samsung sensor hub and modem daemons are not on this phone).
+# kind|id|argument|title, in the order they are started.
+unit|bluetooth.service||Bluetooth
+unit|zrnperfd.service||Performance
+session|ztapps||App list

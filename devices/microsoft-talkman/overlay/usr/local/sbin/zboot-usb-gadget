@@ -1,0 +1,39 @@
+#!/bin/sh
+# The Lumia 950's USB gadget, in place of the generic one: an
+# RNDIS network instead of NCM, so that Windows reaches the phone too (its
+# RNDIS driver is built in and binds from the Microsoft OS descriptors; NCM
+# needs a driver Windows 10 does not have; Linux and macOS take either), and
+# an ACM serial port with a getty on ttyGS0. The phone is 172.16.42.1 and
+# hands the host 172.16.42.2 (10-zboot-usb.network matches the address). The
+# same gadget as the boot stage's rescue shell (initramfs/init).
+g=/sys/kernel/config/usb_gadget/zboot
+[ -d "$g" ] && exit 0
+udc=$(ls /sys/class/udc 2>/dev/null | head -n1)
+[ -n "$udc" ] || { echo "no UDC" >&2; exit 1; }
+mkdir -p "$g/strings/0x409" "$g/configs/c.1/strings/0x409" \
+	"$g/functions/rndis.usb0" "$g/functions/acm.GS0"
+echo 0x1d6b > "$g/idVendor"
+echo 0x0104 > "$g/idProduct"
+# a new device release: Windows asks for the OS descriptors once per vendor,
+# product and release
+echo 0x0510 > "$g/bcdDevice"
+echo 0xef > "$g/bDeviceClass"
+echo 0x02 > "$g/bDeviceSubClass"
+echo 0x01 > "$g/bDeviceProtocol"
+echo "zboot" > "$g/strings/0x409/manufacturer"
+echo "Lumia 950 ztOS" > "$g/strings/0x409/product"
+echo "talkman" > "$g/strings/0x409/serialnumber"
+echo "rndis+acm" > "$g/configs/c.1/strings/0x409/configuration"
+echo 1 > "$g/os_desc/use"
+echo 0xcd > "$g/os_desc/b_vendor_code"
+echo MSFT100 > "$g/os_desc/qw_sign"
+echo 02:5a:42:00:00:01 > "$g/functions/rndis.usb0/dev_addr"
+echo 02:5a:42:00:00:02 > "$g/functions/rndis.usb0/host_addr"
+echo RNDIS > "$g/functions/rndis.usb0/os_desc/interface.rndis/compatible_id"
+echo 5162001 > "$g/functions/rndis.usb0/os_desc/interface.rndis/sub_compatible_id"
+ln -s "$g/functions/rndis.usb0" "$g/configs/c.1/"
+ln -s "$g/functions/acm.GS0" "$g/configs/c.1/"
+ln -s "$g/configs/c.1" "$g/os_desc/"
+echo "$udc" > "$g/UDC"
+ip link set usb0 up 2>/dev/null || true
+ip addr add 172.16.42.1/24 dev usb0 2>/dev/null || true

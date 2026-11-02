@@ -38,7 +38,7 @@ class Fail(Exception):
 
 @dataclass
 class Settings:
-    target: str = "qemu"            # qemu | starlte | gsi (the generic system alone, as a tarball)
+    target: str = "qemu"            # qemu | starlte | talkman | gsi (the generic system alone, as a tarball)
     user: str = "ztos"
     password: str = "ztos"
     hostname: str = "ztos"
@@ -57,7 +57,9 @@ def say(*words):
 
 # a target's device layer (devices/<dir>/: manifest, layer.sh, packages.txt);
 # the GSI has none (design/ztOSIAL.md)
-DEVICES = {"starlte": "samsung-starlte", "qemu": "qemu-virt"}
+DEVICES = {"starlte": "samsung-starlte", "talkman": "microsoft-talkman", "qemu": "qemu-virt"}
+# the targets that are a phone (a zboot boot image, the ZR_ARCH root)
+PHONES = ("starlte", "talkman")
 
 
 def gsi_version() -> str:
@@ -164,7 +166,7 @@ rm -f "$R/etc/resolv.conf"; cp -L /etc/resolv.conf "$R/etc/resolv.conf"
 ch() { chroot "$R" /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/bin HOME=/root LANG=C.UTF-8 "$@"; }
 P="pacman --disable-sandbox --noconfirm"
 
-if [ "$TARGET" = starlte ]; then
+if [ "$TARGET" = starlte ] || [ "$TARGET" = talkman ]; then
 	# the kernel is ztOS's own boot image there, never a package
 	sed -i 's/^#\?IgnorePkg *=.*/IgnorePkg   = linux-aarch64 linux-aarch64-headers/' "$R/etc/pacman.conf"
 fi
@@ -363,7 +365,7 @@ fi
 step "writing the system image"
 # Re-arm first boot even when building from a previously used root tree.
 # The image filesystem is smaller than the phone's USERDATA partition.
-if [ "$TARGET" = starlte ]; then
+if [ "$TARGET" = starlte ] || [ "$TARGET" = talkman ]; then
 	touch "$R/etc/zboot-firstboot"
 fi
 umount -l "$R/var/cache/pacman/pkg" 2>/dev/null || true
@@ -387,7 +389,7 @@ def run_stage(s: Settings, log: Path) -> None:
         "TARGET": s.target, "PACKAGES": " ".join(packages(s.target)), "USERNAME": s.user,
         "PASSWORD": s.password, "HOSTNAME": s.hostname, "TIMEZONE": s.timezone, "FRESH": "1" if s.fresh else "0",
         "ROOTIMG": str(s.dir / "root.img"), "SIZE": str(s.size_gb), "MKE2FS": mke2fs,
-        "LABEL": "ZR_ARCH" if s.target == "starlte" else "ztos-root",
+        "LABEL": "ZR_ARCH" if s.target in PHONES else "ztos-root",
         "PKGCACHE": str(PKGCACHE),
         "DEVDIR": DEVICES.get(s.target, ""), "GSIVERSION": gsi_version(),
         # the device layer: devices/<dir> here; after the repository split, a

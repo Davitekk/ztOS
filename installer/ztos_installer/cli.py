@@ -213,7 +213,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command")
 
     def with_settings(p):
-        p.add_argument("--target", choices=["qemu", "starlte", "gsi"])
+        p.add_argument("--target", choices=["qemu", "starlte", "talkman", "gsi"])
         p.add_argument("--user")
         p.add_argument("--password", help="(else asked; never stored)")
         p.add_argument("--hostname")

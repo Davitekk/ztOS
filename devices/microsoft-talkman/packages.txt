@@ -1,0 +1,16 @@
+# ztOS on the Lumia 950 (talkman). The kernel is ztOS's own boot image, not a
+# package (kernel/build-kernel.sh).
+
+# the boot stage's busybox (boot/build-boot.sh takes it from this root)
+busybox
+
+# the GPU's microcode (qcom/a420_pm4.fw, a420_pfp.fw)
+linux-firmware-qcom
+
+# Bluetooth controller, management and scan tools
+bluez
+bluez-utils
+
+# looking at the hardware
+i2c-tools
+usbutils

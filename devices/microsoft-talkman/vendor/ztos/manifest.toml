@@ -1,0 +1,55 @@
+# ztOSIAL manifest: Microsoft Lumia 950 (talkman), Snapdragon 808. Every
+# interface is served by its generic backend; this file only names the nodes
+# where guessing could be wrong. See design/ztOSIAL.md.
+
+[device]
+codename = "microsoft-talkman"
+name = "Microsoft Lumia 950"
+form_factor = "phone"
+scale = 2.5
+# what Settings shows (its processor, graphics, battery and about pages)
+model = "Microsoft Lumia 950 (talkman)"
+soc = "Snapdragon 808"
+soc_long = "Qualcomm Snapdragon 808 (MSM8992, 20nm)"
+cpu_little = "Cortex-A53"
+cpu_big = "Cortex-A57"
+gpu = "Adreno 418"
+gpu_long = "Qualcomm Adreno 418 (freedreno)"
+battery = "3000 mAh Li-Ion"
+
+[gsi]
+min = "0.2.0"
+
+[ial.Power1]
+backend = "generic"
+# PMI8994: the fuel gauge and the charger
+battery = "/sys/class/power_supply/battery"
+charger = "/sys/class/power_supply/qcom-smbchg-usb"
+current_sign = 1                 # + charging, - draining, as ztOSIAL
+current_node = "/sys/class/power_supply/battery/current_now"
+
+[ial.Perf1]
+backend = "generic"
+# Adreno 418 (msm's devfreq)
+gpu_devfreq = "/sys/class/devfreq/fdb00000.gpu"
+thermal_unit = "millicelsius"
+thermal_marks = [70, 76, 82]
+# no hotplug driver is needed, and none of ztOS's Exynos ones apply
+keep_online = [0]
+hotplug = false
+
+[ial.Display1]
+backend = "generic"
+# The panel's own brightness over DSI (panel-samsung-ams567dj06)
+node = "/sys/class/backlight/fd994000.dsi.0"
+
+[ial.Android1]
+backend = "generic"
+
+[android]
+binder = "binderfs"
+gralloc = "gbm"
+memory_budget_mb = 1200
+
+[boot]
+usb_gadget_udc = "f9200000.usb"
