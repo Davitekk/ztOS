@@ -8,6 +8,9 @@
 #   zboot.rescue=1     do not boot anything, stay in the rescue shell
 #   zboot.deadman=N    reset the phone N seconds after boot unless
 #                      /run/zboot.hold exists (default 0 = never).
+#   zboot.usbtest=1    for trying a kernel booted directly, from the boot partition:
+#                      no USB link 45 s after boot, and this erases the start of
+#                      the boot partition and restarts, so that LK stays in fastboot
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 /bin/busybox --install -s /bin 2>/dev/null
@@ -215,6 +218,19 @@ rpm_check() {
 
 # Bring USB up before anything that may fail: it is the way in.
 usb_up
+if [ "$(arg zboot.usbtest)" = 1 ]; then
+	(
+		sleep 45
+		state=$(cat /sys/class/udc/*/state 2>/dev/null)
+		log "usbtest: udc is '$state'"
+		[ "$state" = configured ] && exit 0
+		dev=$(part_dev boot) || exit 0
+		log "usbtest: erasing the start of $dev, restarting"
+		dd if=/dev/zero of="/dev/$dev" bs=1M count=1 conv=fsync 2>/dev/null
+		sync
+		reboot -f
+	) &
+fi
 rpm_check
 
 [ "$(arg zboot.rescue)" = 1 ] && rescue "requested on the command line"
@@ -238,16 +254,9 @@ mount -t ext4 -o ro "$ROOTDEV" /newroot || rescue "mount of $ROOTDEV failed"
 	rescue "no /sbin/init on ZR_ARCH"
 }
 
-# The gadget goes with the initramfs: the root system builds its own.
-if [ -d /sys/kernel/config/usb_gadget/zboot ]; then
-	killall telnetd udhcpd 2>/dev/null
-	g=/sys/kernel/config/usb_gadget/zboot
-	echo "" > "$g/UDC" 2>/dev/null
-	rm -f "$g/os_desc/c.1" "$g/configs/c.1/rndis.usb0" "$g/configs/c.1/acm.GS0"
-	rmdir "$g/configs/c.1/strings/0x409" "$g/configs/c.1" \
-		"$g/functions/rndis.usb0" "$g/functions/acm.GS0" \
-		"$g/strings/0x409" "$g" 2>/dev/null
-fi
+# The gadget stays for the root system, which takes it as it is (zboot-usb-gadget):
+# on this phone a gadget unbound and bound again stays "not attached" for good.
+killall telnetd udhcpd 2>/dev/null
 rm -f /run/zboot.usb
 
 log "switch_root to $ROOTDEV"

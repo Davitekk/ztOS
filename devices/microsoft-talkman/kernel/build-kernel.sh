@@ -47,6 +47,8 @@ python3 "$HERE/patch-pon-reset.py" "$SRC"
 python3 "$HERE/patch-mdp5-cfg.py" "$SRC"
 python3 "$HERE/patch-mmcc-gpu.py" "$SRC"
 python3 "$HERE/patch-gpu-a418.py" "$SRC"
+python3 "$HERE/patch-camera-key.py" "$SRC"
+python3 "$HERE/patch-dwc3-usb-sel.py" "$SRC"
 
 mkdir -p "$OUT"
 M=(make -C "$SRC" O="$OUT" ARCH=arm64 LLVM=1 KBUILD_BUILD_USER=ztos KBUILD_BUILD_HOST=ztos)
