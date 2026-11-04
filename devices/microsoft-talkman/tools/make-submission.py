@@ -19,7 +19,7 @@ PHONE = {
     "id": "microsoft-talkman",
     "name": "Microsoft Lumia 950",
     "maker": "Microsoft",
-    "model": "RM-1105 (tried); RM-1104, RM-1106, RM-1116, RM-1118 untested",
+    "model": "RM-1105",
     "codename": "talkman",
     "maintainer": "Davitek",
     "contact": "Discord: @davitek_ GitHub: @Davitekk",

@@ -9,7 +9,7 @@ Photo field (nobody else can), and press Send.
 
 - **Name:** `Microsoft Lumia 950`
 - **Maker:** `Microsoft`
-- **Model number:** `RM-1105 (tried); RM-1104, RM-1106, RM-1116, RM-1118 untested`
+- **Model number:** `RM-1105`
 - **Codename:** `talkman`
 - **Your name:** `Davitek`
 - **Discord name, GitHub or link:** `Discord: @davitek_ GitHub: @Davitekk`
