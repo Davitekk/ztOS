@@ -14,10 +14,10 @@ Photo field (nobody else can), and press Send.
 - **Your name:** `Davitek`
 - **Discord name, GitHub or link:** `Discord: @davitek_ GitHub: @Davitekk`
 
-## About this port (416 of 800 characters)
+## About this port (442 of 800 characters)
 
 ````
-ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging and USB work well, ztMETRO scrolls at about 60 fps on the GPU, and both cameras give pictures. There is no Wi-Fi, sound or modem yet, and no CPU frequency scaling, so it is an early port and not yet a usable phone. Tried on one RM-1105.
+ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging, USB and vibration work well, ztMETRO scrolls at about 60 fps on the GPU, both cameras give pictures, and Wi-Fi finds networks. There is no sound or modem yet, and no CPU frequency scaling, so it is an early port and not yet a usable phone. Tried on one RM-1105.
 ````
 
 ## Specifications
@@ -48,11 +48,11 @@ The form starts with a list of features: set each one as below, and use
 | Display | GPU | working | Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps |
 | Input | Touchscreen | working | Synaptics S3708 |
 | Input | Power and volume keys | working |  |
-| Input | Vibration | broken | Not started: no device shows up |
+| Input | Vibration | working | PMI8994 haptics. Measured with the motion chip while the motor runs |
 | Power | CPU, frequency scaling | broken | No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores |
 | Power | Battery and charging | working | PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | untested |  |
-| Network | Wi-Fi | broken | Not started: QCA6174 on PCIe, no support on this chip in this kernel |
+| Network | Wi-Fi | partial | QCA6174 on PCIe with ath10k. Finds 2.4 and 5 GHz networks, and access points answer it. Joining a network has not been tried yet |
 | Network | Bluetooth | broken | QCA6174 is found but does not answer on its UART, even with its power rail and enable line on |
 | Network | Mobile data | broken | Not started: no modem driver for this chip in this kernel |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
@@ -63,8 +63,8 @@ The form starts with a list of features: set each one as below, and use
 | Audio | Microphone | broken | As the speaker |
 | Audio | Headphones | broken | As the speaker |
 | Sensors | Ambient light | untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
-| Sensors | Accelerometer, gyroscope | broken | MPU-6500 answers whoami 0x00 |
-| Sensors | Proximity | untested | The chip is found, but it read 0 |
+| Sensors | Accelerometer, gyroscope | partial | ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet |
+| Sensors | Proximity | untested | The chip is found and reads about 45; not tried with anything near it |
 | Sensors | Magnetometer | partial | AK8975 reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | untested | ZPA2326 reads a value |
 | Camera | Rear camera | partial | Real pictures through camss and ccs; preview about 6 fps, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced |
@@ -72,19 +72,19 @@ The form starts with a list of features: set each one as below, and use
 | Camera | Iris camera, flash | broken | Not started |
 | Location | GPS | broken | Depends on the modem |
 | Software | ztMETRO | working | About 60 fps while scrolling |
-| Software | Android apps (Waydroid) | untested | With no Wi-Fi, its first-start download has no network |
+| Software | Android apps (Waydroid) | untested | Its first-start download needs Wi-Fi, which has not joined a network yet |
 | Software | ztOSIAL (ztos-ial test) | partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
 ## Known quirks
 
-- **It is not usable as a phone yet.** There is no Wi-Fi, sound or modem. The only network is over the USB cable.
+- **It is not usable as a phone yet.** There is no sound or modem. Wi-Fi finds networks but has not joined one yet, so the only tried network is over the USB cable.
 - **A start can take 2 minutes with a black screen.** On about half of all starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge.
 - **The phone runs at about half speed.** With no CPU frequency driver the cores stay at the bootloader's clocks, and heavy apps feel it.
 - **The cameras' colour is approximate and focus is fixed.** There is no ISP: the picture is made on the CPU, with no calibration for these sensors, and no driver for the lens.
 - **Do not press both volume keys in LK.** That enters emergency download mode.
 - **Never write the DPP partition.** It holds calibration that cannot be had back. The install scripts leave it alone.
 
-## Installation guide (8680 of 30000 characters)
+## Installation guide (8726 of 30000 characters)
 
 Paste everything between the two fences:
 
@@ -101,8 +101,8 @@ Tried on one phone, whose USB reports **RM-1105**. Other Lumia 950 models (RM-11
 RM-1116, RM-1118) use the same board and may work, but none has been tried. The 950 XL
 (cityman) is a different phone and this does not support it.
 
-Read the status table in the [README](README.md) first: this port has no Wi-Fi, sound or
-modem yet.
+Read the status table in the [README](README.md) first: this port has no sound or modem yet, and
+Wi-Fi has found networks but not yet joined one.
 
 ### What you need
 

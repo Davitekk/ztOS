@@ -20,6 +20,17 @@ chown -R 0:0 "$R/vendor"
 cp -a "$D/overlay/." "$R/"
 chmod 755 "$R"/usr/local/sbin/* 2>/dev/null || true
 chmod 755 "$R"/usr/local/bin/ztcamera-route
+
+# --- Wi-Fi: this phone's own RF calibration, as ath10k's board file ----------------
+# With the generic board.bin the chip works, but it finds no 5 GHz network. The file is the
+# phone maker's: fetched here, not kept in this repository. It also sets the MAC address, the same
+# on every phone, so NetworkManager gives each phone its own (the overlay's ztos-talkman-mac.conf).
+BDWLAN=$DEVROOT/build/talkman-boot/bdwlan30.bin
+install -d "$(dirname "$BDWLAN")"
+curl -sSL --fail --retry 3 -o "$BDWLAN" \
+	https://raw.githubusercontent.com/Android4Lumia950/firmware-microsoft-talkman/e9e9fac86db9dfd0a1992062987cfcbfd92403c7/bdwlan30.bin
+echo "53016024e0311024fa661cf10c607370e2ce296f350d487429dc402562f7b395  $BDWLAN" | sha256sum -c - > /dev/null
+install -m644 "$BDWLAN" "$R/usr/lib/firmware/ath10k/QCA6174/hw3.0/board.bin"
 # The generic Wi-Fi .network would have systemd-networkd take wl* from
 # NetworkManager; networkd keeps only the USB link here.
 ln -sf /dev/null "$R/etc/systemd/network/20-wlan.network"
@@ -55,4 +66,4 @@ fi
 # systemd-networkd runs the USB link's DHCP server (10-zboot-usb.network;
 # NetworkManager leaves usb0 alone), so the computer gets 172.16.42.2; the
 # USB serial port has a login (COM port on Windows, /dev/ttyACM0 on Linux)
-DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth"
+DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth ztos-talkman-wifi"

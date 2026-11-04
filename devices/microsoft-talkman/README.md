@@ -3,12 +3,13 @@
 The Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, running
 ztOS on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). See [INSTALL.md](INSTALL.md).
 
-This is an early port. The display, touch, charging and USB work well, and both cameras give
-pictures, but **there is no Wi-Fi, sound or modem yet**, so it is not usable as a phone.
+This is an early port. The display, touch, charging, USB and vibration work well, both cameras give
+pictures, and Wi-Fi finds networks, but **there is no sound or modem yet**, so it is not usable as a
+phone.
 
 ## Status
 
-Tried on one phone, whose USB reports RM-1105, on a fresh install of this branch. **Works**: tried, and does what it should.
+Tried on one phone, whose USB reports RM-1105. **Works**: tried, and does what it should.
 **Partial**: some of it works; the notes say what. **Untested**: written or detected, not tried
 with real use. **Not working**: tried and failing, or not started; the notes say which.
 
@@ -23,12 +24,12 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Input | Touchscreen | Works | Synaptics S3708 |
 | Input | Power and volume keys | Works | |
 | Input | Camera button | Untested | No longer restarts the phone; not mapped to anything |
-| Input | Vibration | Not working | Not started: no device shows up |
+| Input | Vibration | Works | PMI8994 haptics, a small driver here. Measured with the motion chip: its noise goes from 0.04 to 0.20 m/s2 while the motor runs, and back. Stops by itself after 15 s at most |
 | Power | CPU, frequency scaling | Not working | No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores |
 | Power | Battery and charging | Works | PMI8994 gauge and charger: USB charging tried, limits set to 4.35 V, 1.5 A. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | Untested | |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
-| Network | Wi-Fi | Not working | Not started: QCA6174 on PCIe, which this kernel has no support for on this chip |
+| Network | Wi-Fi | Partial | QCA6174 on PCIe with ath10k, started after boot. It finds 2.4 and 5 GHz networks and access points answer its probes, so it receives and transmits. Joining a network has **not** been tried: that needs a network's password. Link at Gen 1 |
 | Network | Bluetooth | Not working | QCA6174 on `blsp2_uart2`. Tried by hand: its 3.3 V rail on (PM8994 GPIO 9, which the kernel's device tree leaves off), BT_EN high, 32 kHz clock running; the driver sends and nothing comes back (`command 0xfc00 tx timeout`). The firmware is in Android4Lumia950/firmware-microsoft-talkman |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
 | Audio | Speaker, microphone, headphones | Not working | No sound card. Starting the audio DSP by hand with its firmware (`qcadsp8992.mbn`, as `qcadsp8994.mbn`) resets the phone at once, with no crash record; the TAS2552 amp also lacks a supply in the device tree |
@@ -37,8 +38,8 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
-| Sensors | Ambient light, proximity | Untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
-| Sensors | Accelerometer, gyroscope | Not working | MPU-6500 answers `whoami 0x00` |
+| Sensors | Ambient light, proximity | Untested | The chip is found and ztOSIAL reads it. Light read 0 in a lit room; proximity reads about 45, not tried with anything near it |
+| Sensors | Accelerometer, gyroscope | Partial | Not the MPU-6500 the device tree names but an ICM-20x48 family chip, with a small driver here. Lying still it reads 9.6 m/s2 down its Z axis, and the gyroscope and temperature are sensible. No mounting matrix yet: only Z has been checked, with the phone flat, so X and Y may be swapped or reversed |
 | Other | FM radio, NFC | Untested | Devices appear |
 | Location | GPS | Not working | Depends on the modem |
 | Storage | Internal, 32 GB | Works | ztOS takes MainOS and Data; the system fills it on first start |
@@ -50,7 +51,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 |---|---|---|
 | ztMETRO, the shell | Works | 59.8 fps while scrolling Start, measured on a fresh install; 2 late frames in 30 s |
 | ztCamera | Partial | Live viewfinder, front and rear switch, photos |
-| Android apps (Waydroid) | Untested | With no Wi-Fi, its first-start download has no network |
+| Android apps (Waydroid) | Untested | Its first-start download needs Wi-Fi, which has not joined a network yet |
 | ztOSIAL (`ztos-ial test`) | Partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
 ## How it is made
@@ -75,6 +76,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | `patch-pon-reset.py` | A hard reset on restart |
 | `patch-camera-key.py` | Removes the tree's debugging aid that restarted on the camera button |
 | `patch-camera.py`, `camss-msm8994.patch`, `camera-talkman.dtsi` | The cameras: see the comments in `patch-camera.py` |
+| `patch-hw.py`, `hw-talkman.dtsi`, `drivers/` | The motion chip, the motor, PCIe and Wi-Fi's power: see the comments in each |
 
 ### Good to know when working on it
 
@@ -85,3 +87,10 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 - The full-size sensor readout is more than the camera block's bus takes, so previews are scaled
   on the sensor. `ztcamera-route` holds all of this.
 - Kernels hang: test them from RAM with the boot partition empty (see [INSTALL.md](INSTALL.md)).
+- PCIe starts after boot, from `ztos-talkman-wifi.service`, not while the kernel starts: Wi-Fi's
+  firmware is on the root, and a fault then comes with SSH up. `lspci` should list the QCA6174.
+- The controller needs its core reset (`PCIE_0_CORE_RESET`, which the kernel's table left out).
+  Without it the link reaches L0, yet every read of the card returns all ones and no error.
+- `/dev/input/event0` is now the motor: the power key moved to `event1`.
+- Wi-Fi's MAC address comes from the board file, so it would be the same on every phone.
+  NetworkManager is set to give each phone a stable one of its own.

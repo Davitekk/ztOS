@@ -10,10 +10,10 @@ from pathlib import Path
 GUIDE = Path("devices/microsoft-talkman/INSTALL.md").read_text(encoding="utf-8")
 SUMMARY = (
     "ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, "
-    "on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging and USB "
-    "work well, ztMETRO scrolls at about 60 fps on the GPU, and both cameras give pictures. "
-    "There is no Wi-Fi, sound or modem yet, and no CPU frequency scaling, so it is an early port "
-    "and not yet a usable phone. Tried on one RM-1105."
+    "on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging, USB and "
+    "vibration work well, ztMETRO scrolls at about 60 fps on the GPU, both cameras give pictures, "
+    "and Wi-Fi finds networks. There is no sound or modem yet, and no CPU frequency scaling, so it "
+    "is an early port and not yet a usable phone. Tried on one RM-1105."
 )
 PHONE = {
     "id": "microsoft-talkman",
@@ -44,11 +44,11 @@ FEATURES = [
     ("Display", "GPU", W, "Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps"),
     ("Input", "Touchscreen", W, "Synaptics S3708"),
     ("Input", "Power and volume keys", W, ""),
-    ("Input", "Vibration", B, "Not started: no device shows up"),
+    ("Input", "Vibration", W, "PMI8994 haptics. Measured with the motion chip while the motor runs"),
     ("Power", "CPU, frequency scaling", B, "No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores"),
     ("Power", "Battery and charging", W, "PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start"),
     ("Power", "Sleep (suspend)", U, ""),
-    ("Network", "Wi-Fi", B, "Not started: QCA6174 on PCIe, no support on this chip in this kernel"),
+    ("Network", "Wi-Fi", P, "QCA6174 on PCIe with ath10k. Finds 2.4 and 5 GHz networks, and access points answer it. Joining a network has not been tried yet"),
     ("Network", "Bluetooth", B, "QCA6174 is found but does not answer on its UART, even with its power rail and enable line on"),
     ("Network", "Mobile data", B, "Not started: no modem driver for this chip in this kernel"),
     ("Network", "USB networking", W, "RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console"),
@@ -59,8 +59,8 @@ FEATURES = [
     ("Audio", "Microphone", B, "As the speaker"),
     ("Audio", "Headphones", B, "As the speaker"),
     ("Sensors", "Ambient light", U, "The chip is found and ztOSIAL reads it, but it read 0 in a lit room"),
-    ("Sensors", "Accelerometer, gyroscope", B, "MPU-6500 answers whoami 0x00"),
-    ("Sensors", "Proximity", U, "The chip is found, but it read 0"),
+    ("Sensors", "Accelerometer, gyroscope", P, "ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet"),
+    ("Sensors", "Proximity", U, "The chip is found and reads about 45; not tried with anything near it"),
     ("Sensors", "Magnetometer", P, "AK8975 reads through ztOSIAL; no calibration or mounting matrix"),
     ("Sensors", "Pressure", U, "ZPA2326 reads a value"),
     ("Camera", "Rear camera", P, "Real pictures through camss and ccs; preview about 6 fps, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced"),
@@ -68,11 +68,11 @@ FEATURES = [
     ("Camera", "Iris camera, flash", B, "Not started"),
     ("Location", "GPS", B, "Depends on the modem"),
     ("Software", "ztMETRO", W, "About 60 fps while scrolling"),
-    ("Software", "Android apps (Waydroid)", U, "With no Wi-Fi, its first-start download has no network"),
+    ("Software", "Android apps (Waydroid)", U, "Its first-start download needs Wi-Fi, which has not joined a network yet"),
     ("Software", "ztOSIAL (ztos-ial test)", P, "All but one check passed on a fresh install; the one that fails looks for cpufreq clusters"),
 ]
 NOTES = [
-    ("It is not usable as a phone yet.", "There is no Wi-Fi, sound or modem. The only network is over the USB cable."),
+    ("It is not usable as a phone yet.", "There is no sound or modem. Wi-Fi finds networks but has not joined one yet, so the only tried network is over the USB cable."),
     ("A start can take 2 minutes with a black screen.", "On about half of all starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge."),
     ("The phone runs at about half speed.", "With no CPU frequency driver the cores stay at the bootloader's clocks, and heavy apps feel it."),
     ("The cameras' colour is approximate and focus is fixed.", "There is no ISP: the picture is made on the CPU, with no calibration for these sensors, and no driver for the lens."),

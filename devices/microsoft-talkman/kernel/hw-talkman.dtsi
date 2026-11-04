@@ -1,0 +1,137 @@
+
+/*
+ * The motor, and the Wi-Fi chip's PCIe bus and power. Values from the phone's downstream kernel:
+ * its msm8992.dtsi (pcie0, cnss), and the talkman device tree for the motor. Holding Wi-Fi's strap
+ * pins in cnss (GPIO 0, 1, 111, 112) high changed nothing when tried, so they are left alone.
+ */
+&spmi_bus {
+	pmic@3 {
+		haptics@c000 {
+			compatible = "qcom,pmi8994-haptics";
+			reg = <0xc000 0x100>;
+		};
+	};
+};
+
+&pm8994_gpios {
+	wlan_ldo_en: wlan-ldo-en-state {
+		pinconf {
+			pins = "gpio9";
+			function = PMIC_GPIO_FUNC_NORMAL;
+			output-low;
+			power-source = <PM8994_GPIO_S4>;
+			qcom,drive-strength = <PMIC_GPIO_STRENGTH_LOW>;
+			bias-disable;
+		};
+	};
+};
+
+&tlmm {
+	wlan_en_default: wlan-en-default-state {
+		pins = "gpio113";
+		function = "gpio";
+		drive-strength = <16>;
+		bias-pull-down;
+	};
+
+	pcie0_default: pcie0-default-state {
+		clkreq-pins {
+			pins = "gpio36";
+			function = "pci_e1";
+			drive-strength = <2>;
+			bias-pull-up;
+		};
+		perst-pins {
+			pins = "gpio35";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
+		wake-pins {
+			pins = "gpio37";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
+	};
+};
+
+/ {
+	wlan_vreg: wlan-3v3-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_wlan_3p3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pm8994_gpios 9 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <2000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wlan_ldo_en>;
+	};
+
+	wlan_en: wlan-en-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "wlan_en";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&wlan_vreg>;
+		gpio = <&tlmm 113 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <10000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wlan_en_default>;
+	};
+};
+
+&soc {
+	pcie0: pcie@fc520000 {
+		compatible = "qcom,pcie-msm8994";
+		reg = <0xfc520000 0x2000>,
+		      <0xfc526000 0x1000>,
+		      <0xff000000 0xf1d>,
+		      <0xff000f20 0xa8>,
+		      <0xff100000 0x100000>;
+		reg-names = "parf", "phy", "dbi", "elbi", "config";
+		device_type = "pci";
+		linux,pci-domain = <0>;
+		bus-range = <0x00 0xff>;
+		num-lanes = <1>;
+		max-link-speed = <1>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges = <0x01000000 0 0x00000000 0xff200000 0 0x00100000>,
+			 <0x02000000 0 0xff300000 0xff300000 0 0x00d00000>;
+
+		interrupts = <GIC_SPI 243 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "msi";
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &intc GIC_SPI 244 IRQ_TYPE_LEVEL_HIGH>,
+				<0 0 0 2 &intc GIC_SPI 245 IRQ_TYPE_LEVEL_HIGH>,
+				<0 0 0 3 &intc GIC_SPI 247 IRQ_TYPE_LEVEL_HIGH>,
+				<0 0 0 4 &intc GIC_SPI 248 IRQ_TYPE_LEVEL_HIGH>;
+
+		clocks = <&gcc GCC_PCIE_0_AUX_CLK>,
+			 <&gcc GCC_PCIE_0_CFG_AHB_CLK>,
+			 <&gcc GCC_PCIE_0_MSTR_AXI_CLK>,
+			 <&gcc GCC_PCIE_0_SLV_AXI_CLK>,
+			 <&gcc PCIE_0_PHY_LDO>,
+			 <&rpmcc RPM_SMD_LN_BB_CLK>,
+			 <&gcc GCC_PCIE_0_PIPE_CLK>,
+			 <&divclk4>;
+		clock-names = "aux", "cfg", "bus_master", "bus_slave", "ldo", "ref", "pipe", "sleep";
+		resets = <&gcc PCIE_0_CORE_RESET>, <&gcc PCIE_PHY_0_RESET>;
+		reset-names = "core", "phy";
+		power-domains = <&gcc PCIE_0_GDSC>;
+
+		vdda-supply = <&vreg_l28a_1p0>;
+		vddp-supply = <&vreg_l12a_1p8>;
+		vdd-wlan-io-supply = <&vreg_s4a_1p8>;
+		vdd-wlan-xtal-supply = <&vreg_l30a_1p8>;
+		vddpe-3v3-supply = <&wlan_en>;
+
+		perst-gpios = <&tlmm 35 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pcie0_default>;
+	};
+};

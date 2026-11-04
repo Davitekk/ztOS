@@ -281,6 +281,8 @@ class Sensors(Backend):
                 found.setdefault('proximity', device)
             if {'in_magn_x_raw', 'in_magn_y_raw', 'in_magn_z_raw'} <= names:
                 found.setdefault('magnetometer', device)
+            if {'in_anglvel_x_raw', 'in_anglvel_y_raw', 'in_anglvel_z_raw'} <= names:
+                found.setdefault('gyroscope', device)
         return found
 
     def available(self):
@@ -298,7 +300,7 @@ class Sensors(Backend):
                 if (device / name).exists():
                     scale = float(read(device / 'in_illuminance_scale', '1') or 1)
                     return [float(read(device / name)) * (1 if name.endswith('input') else scale)]
-        axis = {'accelerometer': 'accel', 'magnetometer': 'magn'}.get(sensor)
+        axis = {'accelerometer': 'accel', 'magnetometer': 'magn', 'gyroscope': 'anglvel'}.get(sensor)
         if axis:
             scale = float(read(device / f'in_{axis}_scale', '1') or 1)
             return [read_int(device / f'in_{axis}_{a}_raw') * scale for a in 'xyz']
