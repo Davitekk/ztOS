@@ -49,7 +49,7 @@ FEATURES = [
     ("Power", "Battery and charging", W, "PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start"),
     ("Power", "Sleep (suspend)", U, ""),
     ("Network", "Wi-Fi", B, "Not started: QCA6174 on PCIe, no support on this chip in this kernel"),
-    ("Network", "Bluetooth", B, "The controller is found but does not answer"),
+    ("Network", "Bluetooth", B, "QCA6174 is found but does not answer on its UART, even with its power rail and enable line on"),
     ("Network", "Mobile data", B, "Not started: no modem driver for this chip in this kernel"),
     ("Network", "USB networking", W, "RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console"),
     ("Modem", "SIM and signal", B, "Not started"),

@@ -29,9 +29,9 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Power | Sleep (suspend) | Untested | |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Not working | Not started: QCA6174 on PCIe, which this kernel has no support for on this chip |
-| Network | Bluetooth | Not working | The controller is found but does not answer (`command 0xfc00 tx timeout`) |
+| Network | Bluetooth | Not working | QCA6174 on `blsp2_uart2`. Tried by hand: its 3.3 V rail on (PM8994 GPIO 9, which the kernel's device tree leaves off), BT_EN high, 32 kHz clock running; the driver sends and nothing comes back (`command 0xfc00 tx timeout`). The firmware is in Android4Lumia950/firmware-microsoft-talkman |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
-| Audio | Speaker, microphone, headphones | Not working | No sound card. Starting the audio DSP with its firmware restarts the phone at once |
+| Audio | Speaker, microphone, headphones | Not working | No sound card. Starting the audio DSP by hand with its firmware (`qcadsp8992.mbn`, as `qcadsp8994.mbn`) resets the phone at once, with no crash record; the TAS2552 amp also lacks a supply in the device tree |
 | Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
 | Camera | Front, 5 MP | Partial | Real pictures; a clean preview in a lit room, noisy in the dark. Photos about 1.3 MP |
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |

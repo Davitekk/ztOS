@@ -126,7 +126,7 @@
       "category": "Network",
       "feature": "Bluetooth",
       "status": "broken",
-      "notes": "The controller is found but does not answer"
+      "notes": "QCA6174 is found but does not answer on its UART, even with its power rail and enable line on"
     },
     {
       "category": "Network",

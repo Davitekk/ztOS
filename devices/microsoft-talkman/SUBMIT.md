@@ -53,7 +53,7 @@ The form starts with a list of features: set each one as below, and use
 | Power | Battery and charging | working | PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | untested |  |
 | Network | Wi-Fi | broken | Not started: QCA6174 on PCIe, no support on this chip in this kernel |
-| Network | Bluetooth | broken | The controller is found but does not answer |
+| Network | Bluetooth | broken | QCA6174 is found but does not answer on its UART, even with its power rail and enable line on |
 | Network | Mobile data | broken | Not started: no modem driver for this chip in this kernel |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM and signal | broken | Not started |
