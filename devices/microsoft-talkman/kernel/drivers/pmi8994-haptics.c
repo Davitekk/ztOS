@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * The vibration motor on PMI8994's haptics block, in direct mode, for an ERM motor (one with an
- * off-centre weight). The settings are those of the phone's own downstream device tree: 2.3 V at
- * most, 800 mA limit, 505 kHz, square wave. Strength scales the voltage.
+ * off-centre weight).
+ *
+ * The weight takes about 60 ms to spin up: measured with the phone's motion chip, a 12 ms tap at
+ * the 2.3 V of the phone's downstream device tree moves nothing at all, and the system's taps are
+ * that short. So each start is a kick, 40 ms at the block's 3.6 V, which no effect may cut short.
+ * That gets the motor to speed in a third of the time. It then runs at a voltage set by the
+ * effect's strength, 2.9 V at most, against the block's 800 mA limit.
  */
 #include <linux/input.h>
 #include <linux/jiffies.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
@@ -36,8 +42,11 @@
 #define EN_CTL_EN	BIT(7)
 #define PLAY_EN		BIT(7)
 #define VMAX_STEP_MV	116
-#define VMAX_MV		2300
 #define VMAX_MASK	GENMASK(5, 1)
+#define KICK_MV		3596
+#define KICK_MS		40
+#define RUN_MIN_MV	1800		/* below this it hardly turns */
+#define RUN_MAX_MV	2900
 #define LONGEST_MS	15000		/* whatever userspace asks for, or forgets to stop */
 
 struct hap {
@@ -45,8 +54,11 @@ struct hap {
 	u32 base;
 	struct input_dev *input;
 	struct work_struct set;
-	struct delayed_work stop;
+	struct delayed_work tick;	/* the end of the kick, and of the longest run */
+	struct mutex lock;
+	unsigned long kick_end, deadline;
 	u16 strength;
+	bool start_pending;		/* a tap can end before the work that starts it runs */
 	bool on;
 };
 
@@ -60,6 +72,16 @@ static int hap_u(struct hap *hap, u32 reg, u8 mask, u8 val)
 	return regmap_update_bits(hap->map, hap->base + reg, mask, val);
 }
 
+static void hap_vmax(struct hap *hap, unsigned int mv)
+{
+	hap_u(hap, HAP_VMAX, VMAX_MASK, (mv / VMAX_STEP_MV) << 1);
+}
+
+static void hap_run_voltage(struct hap *hap, u16 strength)
+{
+	hap_vmax(hap, RUN_MIN_MV + (RUN_MAX_MV - RUN_MIN_MV) * (u32)strength / 0xffff);
+}
+
 static void hap_off(struct hap *hap)
 {
 	hap_w(hap, HAP_PLAY, 0);
@@ -71,29 +93,52 @@ static void hap_set_work(struct work_struct *work)
 {
 	struct hap *hap = container_of(work, struct hap, set);
 	u16 strength = READ_ONCE(hap->strength);
-	unsigned int status, steps;
+	bool start = xchg(&hap->start_pending, false);
+	unsigned int status;
 
-	if (!strength) {
-		cancel_delayed_work(&hap->stop);
-		hap_off(hap);
-		return;
+	mutex_lock(&hap->lock);
+	if (!strength && !start) {
+		/* during a kick the tick ends it, as it sees no strength left */
+		if (hap->on && !time_before(jiffies, hap->kick_end)) {
+			cancel_delayed_work(&hap->tick);
+			hap_off(hap);
+		}
+		goto out;
 	}
-	if (!regmap_read(hap->map, hap->base + HAP_STATUS, &status) && (status & STATUS_SC))
-		hap_w(hap, HAP_SC_CLR, 1);
-
-	steps = DIV_ROUND_UP(VMAX_MV / VMAX_STEP_MV * (u32)strength, 0xffff);
-	hap_u(hap, HAP_VMAX, VMAX_MASK, steps << 1);
 	if (!hap->on) {
+		if (!regmap_read(hap->map, hap->base + HAP_STATUS, &status) && (status & STATUS_SC))
+			hap_w(hap, HAP_SC_CLR, 1);
+		hap_vmax(hap, KICK_MV);
 		hap_w(hap, HAP_EN_CTL, EN_CTL_EN);
 		hap_w(hap, HAP_PLAY, PLAY_EN);
 		hap->on = true;
+		hap->kick_end = jiffies + msecs_to_jiffies(KICK_MS);
+		hap->deadline = jiffies + msecs_to_jiffies(LONGEST_MS);
+		mod_delayed_work(system_wq, &hap->tick, msecs_to_jiffies(KICK_MS));
+	} else if (!time_before(jiffies, hap->kick_end) && strength) {
+		hap_run_voltage(hap, strength);
+		hap->deadline = jiffies + msecs_to_jiffies(LONGEST_MS);
+		mod_delayed_work(system_wq, &hap->tick, msecs_to_jiffies(LONGEST_MS));
 	}
-	mod_delayed_work(system_wq, &hap->stop, msecs_to_jiffies(LONGEST_MS));
+out:
+	mutex_unlock(&hap->lock);
 }
 
-static void hap_stop_work(struct work_struct *work)
+static void hap_tick_work(struct work_struct *work)
 {
-	hap_off(container_of(to_delayed_work(work), struct hap, stop));
+	struct hap *hap = container_of(to_delayed_work(work), struct hap, tick);
+	u16 strength = READ_ONCE(hap->strength);
+
+	mutex_lock(&hap->lock);
+	if (hap->on) {
+		if (!strength || !time_before(jiffies, hap->deadline)) {
+			hap_off(hap);
+		} else {
+			hap_run_voltage(hap, strength);
+			mod_delayed_work(system_wq, &hap->tick, hap->deadline - jiffies);
+		}
+	}
+	mutex_unlock(&hap->lock);
 }
 
 static int hap_play(struct input_dev *input, void *data, struct ff_effect *effect)
@@ -103,6 +148,8 @@ static int hap_play(struct input_dev *input, void *data, struct ff_effect *effec
 
 	if (!strength)
 		strength = effect->u.rumble.weak_magnitude;
+	if (strength)
+		WRITE_ONCE(hap->start_pending, true);
 	WRITE_ONCE(hap->strength, strength);
 	schedule_work(&hap->set);
 	return 0;
@@ -113,8 +160,12 @@ static void hap_close(struct input_dev *input)
 	struct hap *hap = input_get_drvdata(input);
 
 	cancel_work_sync(&hap->set);
-	cancel_delayed_work_sync(&hap->stop);
-	hap_off(hap);
+	cancel_delayed_work_sync(&hap->tick);
+	WRITE_ONCE(hap->strength, 0);
+	mutex_lock(&hap->lock);
+	if (hap->on)
+		hap_off(hap);
+	mutex_unlock(&hap->lock);
 }
 
 static int hap_config(struct hap *hap)
@@ -124,7 +175,6 @@ static int hap_config(struct hap *hap)
 	ret |= hap_u(hap, HAP_ACT_TYPE, BIT(0), 1);		/* ERM */
 	ret |= hap_w(hap, HAP_AUTO_RES, 0);			/* resonance is for LRA motors */
 	ret |= hap_u(hap, HAP_PLAY_MODE, GENMASK(5, 4), 0);	/* direct */
-	ret |= hap_u(hap, HAP_VMAX, VMAX_MASK, (VMAX_MV / VMAX_STEP_MV) << 1);
 	ret |= hap_u(hap, HAP_ILIM, BIT(0), 1);			/* 800 mA */
 	ret |= hap_u(hap, HAP_SC_DEB, GENMASK(2, 0), 1);	/* 8 cycles */
 	ret |= hap_u(hap, HAP_INT_PWM, GENMASK(1, 0), 1);	/* 505 kHz */
@@ -152,8 +202,9 @@ static int hap_probe(struct platform_device *pdev)
 	ret = device_property_read_u32(dev, "reg", &hap->base);
 	if (ret)
 		return ret;
+	mutex_init(&hap->lock);
 	INIT_WORK(&hap->set, hap_set_work);
-	INIT_DELAYED_WORK(&hap->stop, hap_stop_work);
+	INIT_DELAYED_WORK(&hap->tick, hap_tick_work);
 
 	ret = hap_config(hap);
 	if (ret)

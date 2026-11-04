@@ -10,8 +10,7 @@ Tried on one phone, whose USB reports **RM-1105**. Other Lumia 950 models (RM-11
 RM-1116, RM-1118) use the same board and may work, but none has been tried. The 950 XL
 (cityman) is a different phone and this does not support it.
 
-Read the status table in the [README](README.md) first: this port has no sound or modem yet, and
-Wi-Fi has found networks but not yet joined one.
+Read the status table in the [README](README.md) first: this port has no sound or modem yet.
 
 ### What you need
 

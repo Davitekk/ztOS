@@ -4,7 +4,7 @@ The Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own 
 ztOS on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). See [INSTALL.md](INSTALL.md).
 
 This is an early port. The display, touch, charging, USB and vibration work well, both cameras give
-pictures, and Wi-Fi finds networks, but **there is no sound or modem yet**, so it is not usable as a
+pictures, and Wi-Fi works, but **there is no sound or modem yet**, so it is not usable as a
 phone.
 
 ## Status
@@ -24,17 +24,17 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Input | Touchscreen | Works | Synaptics S3708 |
 | Input | Power and volume keys | Works | |
 | Input | Camera button | Untested | No longer restarts the phone; not mapped to anything |
-| Input | Vibration | Works | PMI8994 haptics, a small driver here. Measured with the motion chip: its noise goes from 0.04 to 0.20 m/s2 while the motor runs, and back. Stops by itself after 15 s at most |
+| Input | Vibration | Works | PMI8994 haptics, a small driver here. Each start is a 40 ms kick at 3.6 V, as the motor takes 60 ms to spin up and the system's taps last 12 ms; it then runs at up to 2.9 V. Measured with the motion chip, a tap moved 0.2 m/s2 before this and moves 8.8 now. Stops by itself after 15 s at most |
 | Power | CPU, frequency scaling | Not working | No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores |
 | Power | Battery and charging | Works | PMI8994 gauge and charger: USB charging tried, limits set to 4.35 V, 1.5 A. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | Untested | |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
-| Network | Wi-Fi | Partial | QCA6174 on PCIe with ath10k, started after boot. It finds 2.4 and 5 GHz networks and access points answer its probes, so it receives and transmits. Joining a network has **not** been tried: that needs a network's password. Link at Gen 1 |
+| Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
 | Network | Bluetooth | Not working | QCA6174 on `blsp2_uart2`. Tried by hand: its 3.3 V rail on (PM8994 GPIO 9, which the kernel's device tree leaves off), BT_EN high, 32 kHz clock running; the driver sends and nothing comes back (`command 0xfc00 tx timeout`). The firmware is in Android4Lumia950/firmware-microsoft-talkman |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
 | Audio | Speaker, microphone, headphones | Not working | No sound card. Starting the audio DSP by hand with its firmware (`qcadsp8992.mbn`, as `qcadsp8994.mbn`) resets the phone at once, with no crash record; the TAS2552 amp also lacks a supply in the device tree |
-| Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
-| Camera | Front, 5 MP | Partial | Real pictures; a clean preview in a lit room, noisy in the dark. Photos about 1.3 MP |
+| Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
+| Camera | Front, 5 MP | Partial | Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
@@ -51,7 +51,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 |---|---|---|
 | ztMETRO, the shell | Works | 59.8 fps while scrolling Start, measured on a fresh install; 2 late frames in 30 s |
 | ztCamera | Partial | Live viewfinder, front and rear switch, photos |
-| Android apps (Waydroid) | Untested | Its first-start download needs Wi-Fi, which has not joined a network yet |
+| Android apps (Waydroid) | Untested | Its first-start download needs Wi-Fi, which now works; not tried yet |
 | ztOSIAL (`ztos-ial test`) | Partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
 ## How it is made

@@ -35,6 +35,7 @@ static struct {
 	int line_preview;	/* a row's time at the preview's blanking */
 	double wb_r, wb_b, digital;
 	unsigned seq;
+	struct { int exposure, gain; double digital, wb_r, wb_b; } saved[2];
 	/* the worker */
 	pthread_t thread;
 	pthread_mutex_t lock;
@@ -168,10 +169,22 @@ static bool camss_stream_start(void) {
 	f.fmt.pix_mp.pixelformat = v4l2_fourcc(cs.fmt[0], cs.fmt[1], cs.fmt[2], cs.fmt[3]);
 	f.fmt.pix_mp.field = V4L2_FIELD_NONE;
 	f.fmt.pix_mp.num_planes = 1;
-	struct v4l2_requestbuffers req = { .count = CAMSS_BUFS,
-		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, .memory = V4L2_MEMORY_MMAP };
-	if (ioctl(cs.fd, VIDIOC_S_FMT, &f) != 0 || ioctl(cs.fd, VIDIOC_REQBUFS, &req) != 0 ||
-			req.count < 2 || req.count > CAMSS_BUFS) {
+	if (ioctl(cs.fd, VIDIOC_S_FMT, &f) != 0) {
+		camss_stream_stop();
+		return false;
+	}
+	/* The front sensor sends 8 more pixels a row than its format says, and the VFE writes them
+	 * all, past the end of a buffer of the format's size: buffers for what really comes. */
+	struct v4l2_create_buffers req;
+	memset(&req, 0, sizeof(req));
+	req.count = CAMSS_BUFS;
+	req.memory = V4L2_MEMORY_MMAP;
+	req.format = f;
+	unsigned need = (unsigned)cs.pitch * cs.h + 4096;
+	if (req.format.fmt.pix_mp.plane_fmt[0].sizeimage < need) {
+		req.format.fmt.pix_mp.plane_fmt[0].sizeimage = need;
+	}
+	if (ioctl(cs.fd, VIDIOC_CREATE_BUFS, &req) != 0 || req.count < 2 || req.count > CAMSS_BUFS) {
 		camss_stream_stop();
 		return false;
 	}
@@ -246,22 +259,27 @@ static void camss_expose(double green, double clipped) {
 	if (clipped > 0.04) {
 		target *= 0.7;	/* a lamp in the picture: keep what is around it */
 	}
-	double r = green > 0.5 ? target / green : 2;
+	double r = green > 0.5 ? target / green : 3;
 	int base = cs.gain_base > 0 ? cs.gain_base : 256;
 	double again = (double)base / (base - cs.gain);
 	double top = (double)base / (base - cs.gain_max);
 	/* what the sensor cannot reach is made up here, slowly, so it does not pump */
 	{
-		bool limit = r > 1 && again >= top * 0.95 && cs.exposure >= cs.exposure_base;
-		double d = limit ? r * cs.digital : 1;
+		/* Once it is in use the sensor holds still and this alone follows the light: with
+		 * both moving, the gain went up and down between steps and the picture pulsed. */
+		bool limit = again >= top * 0.95 && cs.exposure >= cs.exposure_base && (r > 1 || cs.digital > 1.02);
+		double d = limit ? r : 1;	/* r is against the raw, before this gain */
 		d = d > CAMSS_DIGITAL_MAX ? CAMSS_DIGITAL_MAX : d < 1 ? 1 : d;
 		cs.digital += (d - cs.digital) * 0.25;
-		r /= cs.digital > 1 ? cs.digital : 1;
+		if (cs.digital > 1.02) {
+			return;
+		}
+		cs.digital = 1;
 	}
 	if ((r > 0.88 && r < 1.14) || cs.exposure_base <= 0) {
 		return;
 	}
-	r = r > 1.5 ? 1.5 : r < 0.6 ? 0.6 : r;
+	r = r > 2.5 ? 2.5 : r < 0.5 ? 0.5 : r;
 	double want = cs.exposure * again * r;
 	int longest = cs.line > 0 && cs.rate > 0 ? (int)((double)cs.rate / CAMSS_SLOWEST_FPS / cs.line) : cs.exposure_base;
 	if (longest < cs.exposure_base) {
@@ -278,8 +296,11 @@ static void camss_expose(double green, double clipped) {
 	}
 	double a = want / e;
 	a = a > top ? top : a < 1 ? 1 : a;
-	int g = (int)(base - base / a);
-	g -= g % (cs.gain_step > 0 ? cs.gain_step : 1);
+	/* Upwards to the sensor's next step: the front's run 8x then 16x, and rounding down stayed
+	 * at 8x, never reaching the top where digital gain takes over, so the dark stayed black */
+	int g = (int)(base - base / a), gain_step = cs.gain_step > 0 ? cs.gain_step : 1;
+	g = (g + gain_step - 1) / gain_step * gain_step;
+	g = g > cs.gain_max ? cs.gain_max : g;
 	int blank = cs.blank_base + (e > cs.exposure_base ? e - cs.exposure_base : 0);
 	/* the frame grows before the exposure does, and shrinks after */
 	if (blank > cs.blank) {
@@ -488,8 +509,10 @@ static void camss_box(int32_t *v, int w, int h, int32_t *line, int r) {
 	}
 }
 
-/* From the planes to the picture: white balance, colour noise smoothed away on a plane of a
- * sixteenth the size while brightness keeps its detail, stronger colour, sRGB, and upright. */
+/* From the planes to the picture: white balance, colour noise smoothed away on a smaller plane
+ * while brightness keeps its detail, stronger colour, sRGB, and upright. Where the sensor clipped
+ * its colour means nothing, and the white balance would make it magenta: no colour there, or it
+ * spreads around every bright edge as a halo. */
 static void camss_render(struct camss_planes *p, cairo_surface_t *surface) {
 	static uint8_t gamma[4096];
 	static bool gamma_ready;
@@ -509,35 +532,59 @@ static void camss_render(struct camss_planes *p, cairo_surface_t *surface) {
 	int kg = (int)(range * ev * 256), kr = (int)(range * ev * wr * 256), kb = (int)(range * ev * wbl * 256);
 	int w = p->w, h = p->h;
 	camss_despeckle(p->g, w, h);
-	/* the colour's plane: a cell of it for every 4x4 of the picture */
-	int cw = (w + 3) / 4, ch = (h + 3) / 4;
+	camss_despeckle(p->r, w, h);	/* or a hot pixel is a red blot on the colour's smaller plane */
+	camss_despeckle(p->b, w, h);
+	/* The colour's plane: a cell for every 4x4 of a photo. A preview's pixels are each far more
+	 * of the sensor, so every 2x2, or the colour lands a long way from its edge. */
+	int cell = w < 1000 ? 2 : 4, cshift = cell == 2 ? 1 : 2, sample = cell / 2;
+	int per_cell = (cell / sample) * (cell / sample);
+	int cw = (w + cell - 1) / cell, ch = (h + cell - 1) / cell;
+	int clip = (int)((cs.white - cs.black) * 16 * 0.85);
 	for (int cy = 0; cy < ch; cy++) {
 		int32_t *cr = p->cr + (size_t)cy * cw, *cb = p->cb + (size_t)cy * cw;
 		memset(cr, 0, sizeof(int32_t) * cw);
 		memset(cb, 0, sizeof(int32_t) * cw);
-		int rows = 0;
-		for (int y = cy * 4; y < cy * 4 + 4 && y < h; y += 2, rows++) {
-			const int16_t *rp = p->r + (size_t)y * w, *gp = p->g + (size_t)y * w, *bp = p->b + (size_t)y * w;
-			for (int x = 0; x < w; x += 2) {
+		for (int y = cy * cell; y < cy * cell + cell; y += sample) {
+			int yy = y < h ? y : h - 1;
+			const int16_t *rp = p->r + (size_t)yy * w, *gp = p->g + (size_t)yy * w, *bp = p->b + (size_t)yy * w;
+			for (int x = 0; x < w; x += sample) {
+				if (rp[x] >= clip || gp[x] >= clip || bp[x] >= clip) {
+					continue;
+				}
 				int g = gp[x] * kg >> 8;
-				cr[x >> 2] += (rp[x] * kr >> 8) - g;
-				cb[x >> 2] += (bp[x] * kb >> 8) - g;
+				cr[x >> cshift] += (rp[x] * kr >> 8) - g;
+				cb[x >> cshift] += (bp[x] * kb >> 8) - g;
 			}
 		}
 		for (int x = 0; x < cw; x++) {
-			cr[x] /= rows * 2;
-			cb[x] /= rows * 2;
+			cr[x] /= per_cell;
+			cb[x] /= per_cell;
 		}
 	}
 	/* the darker it is, the wider */
 	int wide = cs.gain * 4 / (cs.gain_base > 0 ? cs.gain_base : 256);
 	camss_box(p->cr, cw, ch, p->line, 1 + wide / 2);
 	camss_box(p->cb, cw, ch, p->line, 1 + wide / 2);
+	/* Where each pixel falls between the plane's cells: stepping from cell to cell makes blocks.
+	 * 8 bits of fraction. */
+	int32_t *xat = malloc(sizeof(int32_t) * w);
+	if (!xat) {
+		return;
+	}
+	for (int x = 0; x < w; x++) {
+		int at = ((x * 2 + 1 - cell) * 256) / (2 * cell);
+		at = at < 0 ? 0 : at;
+		xat[x] = at >= (cw - 1) * 256 ? (cw - 1) * 256 - 1 : at;
+		if (cw < 2) {
+			xat[x] = 0;
+		}
+	}
 	/* where (0, 0) lands and how far a step along and down the sensor goes, in pixels */
 	uint8_t *out = cairo_image_surface_get_data(surface);
 	int stride = cairo_image_surface_get_stride(surface) / 4;
 	int ow = cairo_image_surface_get_width(surface), oh = cairo_image_surface_get_height(surface);
 	if (cs.rotate == 90 || cs.rotate == 270 ? (ow < h || oh < w) : (ow < w || oh < h)) {
+		free(xat);
 		return;
 	}
 	int ox0, oy0, step_x, step_y;	/* the picture's x, y for the sensor's first; the steps below */
@@ -559,12 +606,31 @@ static void camss_render(struct camss_planes *p, cairo_surface_t *surface) {
 	uint32_t *line = (uint32_t *)out + (ptrdiff_t)oy0 * stride + ox0;
 	for (int iy = 0; iy < h; iy++, line += step_y) {
 		const int16_t *gp = p->g + (size_t)iy * w;
-		const int32_t *cr = p->cr + (size_t)(iy >> 2) * cw, *cb = p->cb + (size_t)(iy >> 2) * cw;
+		int yat = ((iy * 2 + 1 - cell) * 256) / (2 * cell);
+		yat = yat < 0 ? 0 : yat;
+		yat = yat >= (ch - 1) * 256 ? (ch - 1) * 256 - 1 : yat;
+		if (ch < 2) {
+			yat = 0;
+		}
+		int yf = yat & 255, ynext = ch < 2 ? 0 : cw;
+		const int32_t *cr = p->cr + (size_t)(yat >> 8) * cw, *cb = p->cb + (size_t)(yat >> 8) * cw;
 		uint32_t *px = line;
 		for (int ix = 0; ix < w; ix++, px += step_x) {
 			int g = gp[ix] * kg >> 8;
+			int xi = xat[ix] >> 8, xf = xat[ix] & 255, xn = cw < 2 ? 0 : 1;
+			int dr = ((cr[xi] * (256 - xf) + cr[xi + xn] * xf) >> 8) * (256 - yf) +
+				((cr[xi + ynext] * (256 - xf) + cr[xi + ynext + xn] * xf) >> 8) * yf;
+			int db = ((cb[xi] * (256 - xf) + cb[xi + xn] * xf) >> 8) * (256 - yf) +
+				((cb[xi + ynext] * (256 - xf) + cb[xi + ynext + xn] * xf) >> 8) * yf;
+			dr >>= 8;
+			db >>= 8;
+			/* fading out towards white, where there is no colour left to show */
+			if (g > 3300) {
+				int left = g > 4095 ? 0 : 4095 - g;
+				dr = dr * left / 795;
+				db = db * left / 795;
+			}
 			/* a quarter stronger: sensors see colours paler than they are */
-			int dr = cr[ix >> 2], db = cb[ix >> 2];
 			int r = g + dr + (dr >> 2), b = g + db + (db >> 2);
 			int g2 = g - (dr >> 3) - (db >> 3);
 			r = r < 0 ? 0 : r > 4095 ? 4095 : r;
@@ -573,6 +639,7 @@ static void camss_render(struct camss_planes *p, cairo_surface_t *surface) {
 			*px = 0xff000000u | (uint32_t)gamma[r] << 16 | (uint32_t)gamma[g2] << 8 | gamma[b];
 		}
 	}
+	free(xat);
 	cairo_surface_mark_dirty(surface);
 }
 
@@ -593,7 +660,7 @@ static void camss_develop(const uint8_t *in, cairo_surface_t *surface) {
 		cs.wb_r += (tr - cs.wb_r) * 0.08;
 		cs.wb_b += (tb - cs.wb_b) * 0.08;
 	}
-	if (!(cs.seq % 4)) {
+	if (!(cs.seq % 3)) {
 		camss_expose(mean[1], mean[3]);
 	}
 	cs.seq++;
@@ -720,6 +787,18 @@ static void camss_size(int full, int *w, int *h);
 
 static bool camss_open(enum camss_cam cam) {
 	camss_close();
+	if (cam != cs.cam && cs.exposure) {
+		cs.saved[cs.cam].exposure = cs.exposure;
+		cs.saved[cs.cam].gain = cs.gain;
+		cs.saved[cs.cam].digital = cs.digital;
+		cs.saved[cs.cam].wb_r = cs.wb_r;
+		cs.saved[cs.cam].wb_b = cs.wb_b;
+		cs.exposure = cs.saved[cam].exposure;
+		cs.gain = cs.saved[cam].gain;
+		cs.digital = cs.saved[cam].exposure ? cs.saved[cam].digital : 1;
+		cs.wb_r = cs.saved[cam].exposure ? cs.saved[cam].wb_r : 1.6;
+		cs.wb_b = cs.saved[cam].exposure ? cs.saved[cam].wb_b : 1.6;
+	}
 	cs.cam = cam;
 	if (!camss_route("preview")) {
 		return false;
