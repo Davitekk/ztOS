@@ -31,6 +31,13 @@ curl -sSL --fail --retry 3 -o "$BDWLAN" \
 	https://raw.githubusercontent.com/Android4Lumia950/firmware-microsoft-talkman/e9e9fac86db9dfd0a1992062987cfcbfd92403c7/bdwlan30.bin
 echo "53016024e0311024fa661cf10c607370e2ce296f350d487429dc402562f7b395  $BDWLAN" | sha256sum -c - > /dev/null
 install -m644 "$BDWLAN" "$R/usr/lib/firmware/ath10k/QCA6174/hw3.0/board.bin"
+
+# --- Sound: the audio DSP's firmware, under the name the kernel's device tree asks for ------
+ADSP=$DEVROOT/build/talkman-boot/qcadsp8992.mbn
+curl -sSL --fail --retry 3 -o "$ADSP" \
+	https://raw.githubusercontent.com/Android4Lumia950/firmware-microsoft-talkman/e9e9fac86db9dfd0a1992062987cfcbfd92403c7/qcadsp8992.mbn
+echo "1266429dd8a9d746ceff2d712bde7edc580c25fc85f3f0f4515f4b867a18e12f  $ADSP" | sha256sum -c - > /dev/null
+install -m644 "$ADSP" "$R/usr/lib/firmware/qcadsp8994.mbn"
 # The generic Wi-Fi .network would have systemd-networkd take wl* from
 # NetworkManager; networkd keeps only the USB link here.
 ln -sf /dev/null "$R/etc/systemd/network/20-wlan.network"
@@ -66,4 +73,4 @@ fi
 # systemd-networkd runs the USB link's DHCP server (10-zboot-usb.network;
 # NetworkManager leaves usb0 alone), so the computer gets 172.16.42.2; the
 # USB serial port has a login (COM port on Windows, /dev/ttyACM0 on Linux)
-DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth ztos-talkman-wifi"
+DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth ztos-talkman-wifi ztos-talkman-audio"

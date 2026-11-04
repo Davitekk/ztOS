@@ -1,0 +1,16 @@
+[Unit]
+Description=Start the audio DSP, which the sound card waits for
+DefaultDependencies=no
+After=local-fs.target
+Before=shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/sys/class/remoteproc/remoteproc0/state
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'grep -q running /sys/class/remoteproc/remoteproc0/state || echo start > /sys/class/remoteproc/remoteproc0/state'
+ExecStop=-/bin/sh -c 'echo stop > /sys/class/remoteproc/remoteproc0/state'
+
+[Install]
+WantedBy=multi-user.target

@@ -10,7 +10,7 @@ Tried on one phone, whose USB reports **RM-1105**. Other Lumia 950 models (RM-11
 RM-1116, RM-1118) use the same board and may work, but none has been tried. The 950 XL
 (cityman) is a different phone and this does not support it.
 
-Read the status table in the [README](README.md) first: this port has no sound or modem yet.
+Read the status table in the [README](README.md) first: this port has no microphone or modem yet.
 
 ### What you need
 
@@ -144,15 +144,20 @@ then repeat `fastboot boot`.
 The first start usually reaches the shell in about a minute, but the screen may stay black for
 up to 2 minutes:
 
-- On about half of all starts the phone's power controller does not answer. The boot stage
-  notices and restarts by itself, sometimes more than once. Each try vibrates.
+- On some starts the phone's power controller does not answer. The boot stage notices and
+  restarts by itself, sometimes more than once. Each try vibrates.
 - Every start has a 20 second wait for the battery gauge.
 
 Then the shell appears. Over the USB cable you can also log in: `ssh YOURNAME@172.16.42.1`,
 and a serial console appears as a COM port.
 
-The default build in this guide was rebuilt from scratch and installed on the test phone with
-these steps on 2026-11-04. It reached the shell, and scrolling Start measured 59.8 fps.
+An earlier build was rebuilt from scratch and installed on the test phone with these steps on
+2026-11-04: it reached the shell, and scrolling Start measured 59.8 fps. Wi-Fi, vibration, the
+motion sensors and sound came after that, and were put on that same installation by hand, so this
+guide has not yet been run from the start with them.
+
+Connect to Wi-Fi from Settings. On the command line, a password with a `!` in it needs single
+quotes: bash treats `!` in double quotes as a history command.
 
 ### If something goes wrong
 

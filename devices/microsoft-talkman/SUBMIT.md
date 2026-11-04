@@ -14,10 +14,10 @@ Photo field (nobody else can), and press Send.
 - **Your name:** `Davitek`
 - **Discord name, GitHub or link:** `Discord: @davitek_ GitHub: @Davitekk`
 
-## About this port (433 of 800 characters)
+## About this port (458 of 800 characters)
 
 ````
-ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging, USB and vibration work well, ztMETRO scrolls at about 60 fps on the GPU, both cameras give pictures, and Wi-Fi works. There is no sound or modem yet, and no CPU frequency scaling, so it is an early port and not yet a usable phone. Tried on one RM-1105.
+ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging, USB and vibration work well, ztMETRO scrolls at about 60 fps on the GPU, both cameras give pictures, Wi-Fi works and the speaker plays. There are no microphones or modem yet, and no CPU frequency scaling, so it is an early port and not yet a usable phone. Tried on one RM-1105.
 ````
 
 ## Specifications
@@ -42,7 +42,7 @@ The form starts with a list of features: set each one as below, and use
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Boot | Booting from internal storage | partial | Works, but the power controller does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes |
+| Boot | Booting from internal storage | partial | Works, but the power controller does not answer on some starts; the boot stage restarts by itself, so a start takes 80 s and sometimes 3 minutes or more |
 | Display | Panel | working | 1440x2560 dual-DSI command-mode AMOLED at 60 Hz |
 | Display | Brightness | working |  |
 | Display | GPU | working | Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps |
@@ -59,9 +59,9 @@ The form starts with a list of features: set each one as below, and use
 | Modem | SIM and signal | broken | Not started |
 | Modem | SMS | broken | Not started |
 | Modem | Calls | broken | Not started |
-| Audio | Speaker | broken | No sound card. Starting the audio DSP with its firmware restarts the phone at once |
-| Audio | Microphone | broken | As the speaker |
-| Audio | Headphones | broken | As the speaker |
+| Audio | Speaker | working | TAS2553 amp behind the audio DSP, through PipeWire |
+| Audio | Microphone | broken | Not started: the WCD9330 codec has no driver in this kernel |
+| Audio | Headphones | broken | As the microphone |
 | Sensors | Ambient light | untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
 | Sensors | Accelerometer, gyroscope | partial | ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet |
 | Sensors | Proximity | untested | The chip is found and reads about 45; not tried with anything near it |
@@ -77,14 +77,14 @@ The form starts with a list of features: set each one as below, and use
 
 ## Known quirks
 
-- **It is not usable as a phone yet.** There is no sound or modem.
-- **A start can take 2 minutes with a black screen.** On about half of all starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge.
+- **It is not usable as a phone yet.** There are no microphones, earpiece or modem.
+- **A start can take minutes with a black screen.** On some starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge.
 - **The phone runs at about half speed.** With no CPU frequency driver the cores stay at the bootloader's clocks, and heavy apps feel it.
 - **The cameras' colour is approximate and focus is fixed.** There is no ISP: the picture is made on the CPU, with no calibration for these sensors, and no driver for the lens.
 - **Do not press both volume keys in LK.** That enters emergency download mode.
 - **Never write the DPP partition.** It holds calibration that cannot be had back. The install scripts leave it alone.
 
-## Installation guide (8673 of 30000 characters)
+## Installation guide (8981 of 30000 characters)
 
 Paste everything between the two fences:
 
@@ -101,7 +101,7 @@ Tried on one phone, whose USB reports **RM-1105**. Other Lumia 950 models (RM-11
 RM-1116, RM-1118) use the same board and may work, but none has been tried. The 950 XL
 (cityman) is a different phone and this does not support it.
 
-Read the status table in the [README](README.md) first: this port has no sound or modem yet.
+Read the status table in the [README](README.md) first: this port has no microphone or modem yet.
 
 ### What you need
 
@@ -235,15 +235,20 @@ then repeat `fastboot boot`.
 The first start usually reaches the shell in about a minute, but the screen may stay black for
 up to 2 minutes:
 
-- On about half of all starts the phone's power controller does not answer. The boot stage
-  notices and restarts by itself, sometimes more than once. Each try vibrates.
+- On some starts the phone's power controller does not answer. The boot stage notices and
+  restarts by itself, sometimes more than once. Each try vibrates.
 - Every start has a 20 second wait for the battery gauge.
 
 Then the shell appears. Over the USB cable you can also log in: `ssh YOURNAME@172.16.42.1`,
 and a serial console appears as a COM port.
 
-The default build in this guide was rebuilt from scratch and installed on the test phone with
-these steps on 2026-11-04. It reached the shell, and scrolling Start measured 59.8 fps.
+An earlier build was rebuilt from scratch and installed on the test phone with these steps on
+2026-11-04: it reached the shell, and scrolling Start measured 59.8 fps. Wi-Fi, vibration, the
+motion sensors and sound came after that, and were put on that same installation by hand, so this
+guide has not yet been run from the start with them.
+
+Connect to Wi-Fi from Settings. On the command line, a password with a `!` in it needs single
+quotes: bash treats `!` in double quotes as a history command.
 
 ### If something goes wrong
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Motion sensors, the motor and Wi-Fi.
+"""Motion sensors, the motor, Wi-Fi and the audio DSP.
 
 patch-hw.py <kernel source>
 
 Adds two small drivers from drivers/ (the motion chip, the motor), teaches pcie-qcom this chip's
 PCIe controller and 20 nm PHY, corrects its clocks and adds its reset, and appends hw-talkman.dtsi.
+
+hw-talkman.dtsi also moves the audio DSP's memory to where this phone's secure firmware wants it,
+and gives its loader the crypto engine's clock.
 
 PCIe waits to be started, by `echo 1 > /sys/module/pcie_qcom/parameters/start` from
 ztos-talkman-wifi.service, for two reasons: Wi-Fi's firmware is on the root file system, and a PCIe
@@ -20,6 +23,27 @@ TALKMAN = "arch/arm64/boot/dts/qcom/msm8992-msft-lumia-octagon-talkman.dts"
 GCC = "drivers/clk/qcom/gcc-msm8994.c"
 PCIE = "drivers/pci/controller/dwc/pcie-qcom.c"
 GCC_IDS = "include/dt-bindings/clock/qcom,gcc-msm8994.h"
+PAS = "drivers/remoteproc/qcom_q6v5_pas.c"
+
+PAS_EDITS = [
+    # The crypto engine's clock, taken only now and at the downstream kernel's 85.71 MHz: the
+    # driver's second clock from here on, which it turns off when the DSP has taken over
+    ("\tret = clk_prepare_enable(pas->aggre2_clk);\n",
+     "\tif (!pas->aggre2_clk) {\n"
+     "\t\tstruct of_phandle_args spec;\n\n"
+     "\t\tif (!of_parse_phandle_with_args(pas->dev->of_node, \"ztos,crypto-clock\",\n"
+     "\t\t\t\t\t\t\"#clock-cells\", 0, &spec)) {\n"
+     "\t\t\tstruct clk *crypto = of_clk_get_from_provider(&spec);\n\n"
+     "\t\t\tof_node_put(spec.np);\n"
+     "\t\t\tif (!IS_ERR(crypto)) {\n"
+     "\t\t\t\tclk_set_rate(crypto, 85710000);\n"
+     "\t\t\t\tpas->aggre2_clk = crypto;\n"
+     "\t\t\t}\n"
+     "\t\t}\n"
+     "\t}\n"
+     "\tret = clk_prepare_enable(pas->aggre2_clk);\n"),
+    ("#include <linux/clk.h>\n", "#include <linux/clk.h>\n#include <linux/clk-provider.h>\n#include <linux/of.h>\n"),
+]
 
 GCC_EDITS = [
     # The controller's own reset, which the tree's table leaves out
@@ -279,6 +303,7 @@ def main():
     edit(source / GCC, GCC_EDITS)
     edit(source / GCC_IDS, [("#define MSS_RESET\t\t\t\t5\n", "#define MSS_RESET\t\t\t\t5\n#define PCIE_0_CORE_RESET\t\t6\n")])
     edit(source / PCIE, PCIE_EDITS)
+    edit(source / PAS, PAS_EDITS)
 
     imu = source / "drivers/iio/imu"
     shutil.copy(HERE / "drivers/icm20x48.c", imu)

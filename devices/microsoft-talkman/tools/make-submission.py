@@ -12,7 +12,7 @@ SUMMARY = (
     "ztOS on the Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own UEFI, "
     "on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). The display, touch, charging, USB and "
     "vibration work well, ztMETRO scrolls at about 60 fps on the GPU, both cameras give pictures, "
-    "and Wi-Fi works. There is no sound or modem yet, and no CPU frequency scaling, so it "
+    "Wi-Fi works and the speaker plays. There are no microphones or modem yet, and no CPU frequency scaling, so it "
     "is an early port and not yet a usable phone. Tried on one RM-1105."
 )
 PHONE = {
@@ -38,7 +38,7 @@ SPECS = [
 ]
 W, P, B, U = "working", "partial", "broken", "untested"
 FEATURES = [
-    ("Boot", "Booting from internal storage", P, "Works, but the power controller does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes"),
+    ("Boot", "Booting from internal storage", P, "Works, but the power controller does not answer on some starts; the boot stage restarts by itself, so a start takes 80 s and sometimes 3 minutes or more"),
     ("Display", "Panel", W, "1440x2560 dual-DSI command-mode AMOLED at 60 Hz"),
     ("Display", "Brightness", W, ""),
     ("Display", "GPU", W, "Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps"),
@@ -55,9 +55,9 @@ FEATURES = [
     ("Modem", "SIM and signal", B, "Not started"),
     ("Modem", "SMS", B, "Not started"),
     ("Modem", "Calls", B, "Not started"),
-    ("Audio", "Speaker", B, "No sound card. Starting the audio DSP with its firmware restarts the phone at once"),
-    ("Audio", "Microphone", B, "As the speaker"),
-    ("Audio", "Headphones", B, "As the speaker"),
+    ("Audio", "Speaker", W, "TAS2553 amp behind the audio DSP, through PipeWire"),
+    ("Audio", "Microphone", B, "Not started: the WCD9330 codec has no driver in this kernel"),
+    ("Audio", "Headphones", B, "As the microphone"),
     ("Sensors", "Ambient light", U, "The chip is found and ztOSIAL reads it, but it read 0 in a lit room"),
     ("Sensors", "Accelerometer, gyroscope", P, "ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet"),
     ("Sensors", "Proximity", U, "The chip is found and reads about 45; not tried with anything near it"),
@@ -72,8 +72,8 @@ FEATURES = [
     ("Software", "ztOSIAL (ztos-ial test)", P, "All but one check passed on a fresh install; the one that fails looks for cpufreq clusters"),
 ]
 NOTES = [
-    ("It is not usable as a phone yet.", "There is no sound or modem."),
-    ("A start can take 2 minutes with a black screen.", "On about half of all starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge."),
+    ("It is not usable as a phone yet.", "There are no microphones, earpiece or modem."),
+    ("A start can take minutes with a black screen.", "On some starts the power controller does not answer, and the boot stage restarts by itself. The phone vibrates on each try. Every start also waits 20 s for the battery gauge."),
     ("The phone runs at about half speed.", "With no CPU frequency driver the cores stay at the bootloader's clocks, and heavy apps feel it."),
     ("The cameras' colour is approximate and focus is fixed.", "There is no ISP: the picture is made on the CPU, with no calibration for these sensors, and no driver for the lens."),
     ("Do not press both volume keys in LK.", "That enters emergency download mode."),

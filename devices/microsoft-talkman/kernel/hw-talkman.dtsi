@@ -135,3 +135,33 @@
 		pinctrl-0 = <&pcie0_default>;
 	};
 };
+
+/*
+ * The secure firmware checks a DSP's image with the crypto engine, whose clock has to be on: the
+ * downstream kernel's "scm_ce1_clk". Without it the DSP is refused (-22). A property the kernel's
+ * dependency scan does not read: under "clocks" the driver order changes and the power controller
+ * stops answering on most boots, and on the scm device the phone does not boot at all. The loader
+ * takes it as the DSP starts (patch-hw.py).
+ */
+&adsp_pil {
+	ztos,crypto-clock = <&rpmcc RPM_SMD_CE1_CLK>;
+};
+
+/*
+ * The audio DSP's memory, as the phone's own downstream device tree has it. At the 0x0ca00000 of
+ * the tree here, writing the firmware there restarts the phone, with no record of why.
+ * It overlaps venus_mem's place, which nothing here uses.
+ */
+&adsp_mem {
+	reg = <0 0x0ce00000 0 0x1c00000>;
+};
+
+/ {
+	reserved-memory {
+		/* what moving it leaves between the modem's memory and its own: not for the kernel */
+		adsp_hole_mem: adsp-hole@ca00000 {
+			reg = <0 0x0ca00000 0 0x400000>;
+			no-map;
+		};
+	};
+};

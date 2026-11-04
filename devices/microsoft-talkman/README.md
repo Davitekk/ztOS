@@ -4,8 +4,8 @@ The Snapdragon 808 Lumia 950, booted through BootShim and LK on the phone's own 
 ztOS on the Android4Lumia950 mainline kernel (Linux 7.3-rc2). See [INSTALL.md](INSTALL.md).
 
 This is an early port. The display, touch, charging, USB and vibration work well, both cameras give
-pictures, and Wi-Fi works, but **there is no sound or modem yet**, so it is not usable as a
-phone.
+pictures, Wi-Fi works and the speaker plays, but **there is no microphone or modem yet**, so it is
+not usable as a phone.
 
 ## Status
 
@@ -17,7 +17,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 
 | Category | Feature | Status | Notes |
 |---|---|---|---|
-| Boot | Booting from internal storage | Partial | Works, but the power controller (RPM) does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes. Cause unknown |
+| Boot | Booting from internal storage | Partial | Works, but the power controller (RPM) does not answer on some starts, 3 of the last 10 here; the boot stage restarts by itself, so a start takes 80 s and sometimes 3 minutes or more. Cause unknown |
 | Display | Panel, 1440x2560 | Works | Dual-DSI command-mode AMOLED at 60 Hz, clean picture |
 | Display | Brightness | Works | |
 | Display | GPU | Works | Adreno 418 run as A430 (freedreno, GLES 3.0). Scrolling Start measured at about 60 fps |
@@ -32,7 +32,8 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
 | Network | Bluetooth | Not working | QCA6174 on `blsp2_uart2`. Tried by hand: its 3.3 V rail on (PM8994 GPIO 9, which the kernel's device tree leaves off), BT_EN high, 32 kHz clock running; the driver sends and nothing comes back (`command 0xfc00 tx timeout`). The firmware is in Android4Lumia950/firmware-microsoft-talkman |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
-| Audio | Speaker, microphone, headphones | Not working | No sound card. Starting the audio DSP by hand with its firmware (`qcadsp8992.mbn`, as `qcadsp8994.mbn`) resets the phone at once, with no crash record; the TAS2552 amp also lacks a supply in the device tree |
+| Audio | Speaker | Works | TAS2553 amp behind the audio DSP, through PipeWire and its volume. Checked by recording it with a microphone beside the phone: tones at 440, 1500 and 3000 Hz, clean and loud |
+| Audio | Earpiece, microphones, headphones | Not working | Not started: on the WCD9330 codec over SLIMbus, which has no driver in this kernel |
 | Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
 | Camera | Front, 5 MP | Partial | Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
@@ -51,6 +52,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 |---|---|---|
 | ztMETRO, the shell | Works | 59.8 fps while scrolling Start, measured on a fresh install; 2 late frames in 30 s |
 | ztCamera | Partial | Live viewfinder, front and rear switch, photos |
+| Sound in ztMETRO | Works | Through PipeWire and WirePlumber |
 | Android apps (Waydroid) | Untested | Its first-start download needs Wi-Fi, which now works; not tried yet |
 | ztOSIAL (`ztos-ial test`) | Partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
@@ -87,6 +89,12 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 - The full-size sensor readout is more than the camera block's bus takes, so previews are scaled
   on the sensor. `ztcamera-route` holds all of this.
 - Kernels hang: test them from RAM with the boot partition empty (see [INSTALL.md](INSTALL.md)).
+- The audio DSP starts after boot, from `ztos-talkman-audio.service`. Its memory must be at
+  0x0ce00000: at the kernel tree's address the phone restarts with no record. PipeWire must send it
+  16 bits (`51-ztos-talkman.conf`): offered 24, it plays 48 dB too quiet.
+- The secure firmware refuses the DSP unless the crypto engine's clock is on. That clock must not
+  be under `clocks` in the device tree: the changed driver order makes the power controller stop
+  answering on most boots. It is taken when the DSP starts (`ztos,crypto-clock`, `patch-hw.py`).
 - PCIe starts after boot, from `ztos-talkman-wifi.service`, not while the kernel starts: Wi-Fi's
   firmware is on the root, and a fault then comes with SSH up. `lspci` should list the QCA6174.
 - The controller needs its core reset (`PCIE_0_CORE_RESET`, which the kernel's table left out).
