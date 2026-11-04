@@ -277,7 +277,7 @@ class Sensors(Backend):
                 found.setdefault('light', device)
             if {'in_accel_x_raw', 'in_accel_y_raw', 'in_accel_z_raw'} <= names:
                 found.setdefault('accelerometer', device)
-            if 'in_proximity_raw' in names:
+            if 'in_proximity_raw' in names or 'in_proximity0_raw' in names:
                 found.setdefault('proximity', device)
             if {'in_magn_x_raw', 'in_magn_y_raw', 'in_magn_z_raw'} <= names:
                 found.setdefault('magnetometer', device)
@@ -294,7 +294,7 @@ class Sensors(Backend):
         if device is None:
             raise NotSupported(sensor)
         if sensor == 'light':
-            for name in ('in_illuminance_input', 'in_illuminance_raw'):
+            for name in ('in_illuminance_input', 'in_illuminance0_input', 'in_illuminance_raw'):
                 if (device / name).exists():
                     scale = float(read(device / 'in_illuminance_scale', '1') or 1)
                     return [float(read(device / name)) * (1 if name.endswith('input') else scale)]
@@ -303,7 +303,8 @@ class Sensors(Backend):
             scale = float(read(device / f'in_{axis}_scale', '1') or 1)
             return [read_int(device / f'in_{axis}_{a}_raw') * scale for a in 'xyz']
         if sensor == 'proximity':
-            return [float(read_int(device / 'in_proximity_raw'))]
+            name = 'in_proximity_raw' if (device / 'in_proximity_raw').exists() else 'in_proximity0_raw'
+            return [float(read_int(device / name))]
         raise NotSupported(sensor)
 
     def m_SetAutoBrightness(self, enabled):

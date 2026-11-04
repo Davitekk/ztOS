@@ -19,6 +19,7 @@ chown -R 0:0 "$R/vendor"
 
 cp -a "$D/overlay/." "$R/"
 chmod 755 "$R"/usr/local/sbin/* 2>/dev/null || true
+chmod 755 "$R"/usr/local/bin/ztcamera-route
 # The generic Wi-Fi .network would have systemd-networkd take wl* from
 # NetworkManager; networkd keeps only the USB link here.
 ln -sf /dev/null "$R/etc/systemd/network/20-wlan.network"

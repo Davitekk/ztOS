@@ -16,7 +16,8 @@
 #define CAMSS_ROUTE	"ztcamera-route"
 #define CAMSS_BUFS	4
 #define CAMSS_AE_TARGET	0.16	/* of the sensor's range, green, in the linear */
-#define CAMSS_SLOWEST_FPS 10	/* how far the dark may slow the preview down */
+#define CAMSS_SLOWEST_FPS 15	/* how far the dark may slow the preview down */
+#define CAMSS_DIGITAL_MAX 8.0	/* past the sensor's limits, in the dark: noisy, but a picture */
 #define CAMSS_BLEND	3	/* how many frames before weigh against this one */
 #define CAMSS_PHOTO_FRAMES 3	/* averaged into a photo */
 
@@ -32,7 +33,7 @@ static struct {
 	int exposure, exposure_max, gain, gain_max, gain_step;
 	int exposure_base, blank_base, blank, rate;
 	int line_preview;	/* a row's time at the preview's blanking */
-	double wb_r, wb_b;
+	double wb_r, wb_b, digital;
 	unsigned seq;
 	/* the worker */
 	pthread_t thread;
@@ -43,7 +44,7 @@ static struct {
 	struct v4l2_buffer held_buf;
 	cairo_surface_t *back;
 	int r_at, g0_at, g1_at, b_at;	/* the colours' places in the 2x2 cell */
-} cs = { .fd = -1, .sub = -1, .wb_r = 1.6, .wb_b = 1.6, .held = -1, .done_fd = -1,
+} cs = { .fd = -1, .sub = -1, .wb_r = 1.6, .wb_b = 1.6, .digital = 1, .held = -1, .done_fd = -1,
 	.lock = PTHREAD_MUTEX_INITIALIZER, .wake = PTHREAD_COND_INITIALIZER };
 
 /* What a camera's ISP would do, on the CPU, on a block of the sensor's cells per pixel. */
@@ -240,17 +241,28 @@ static void camss_cells(int full, int *step_x, int *step_y, int *cols, int *rows
 
 /* Exposure, then a little gain, then a longer frame in the dark, then gain: a slower picture
  * is better than a noisier one, down to CAMSS_SLOWEST_FPS. */
-static void camss_expose(double green) {
+static void camss_expose(double green, double clipped) {
 	double target = CAMSS_AE_TARGET * (cs.white - cs.black);
+	if (clipped > 0.04) {
+		target *= 0.7;	/* a lamp in the picture: keep what is around it */
+	}
 	double r = green > 0.5 ? target / green : 2;
+	int base = cs.gain_base > 0 ? cs.gain_base : 256;
+	double again = (double)base / (base - cs.gain);
+	double top = (double)base / (base - cs.gain_max);
+	/* what the sensor cannot reach is made up here, slowly, so it does not pump */
+	{
+		bool limit = r > 1 && again >= top * 0.95 && cs.exposure >= cs.exposure_base;
+		double d = limit ? r * cs.digital : 1;
+		d = d > CAMSS_DIGITAL_MAX ? CAMSS_DIGITAL_MAX : d < 1 ? 1 : d;
+		cs.digital += (d - cs.digital) * 0.25;
+		r /= cs.digital > 1 ? cs.digital : 1;
+	}
 	if ((r > 0.88 && r < 1.14) || cs.exposure_base <= 0) {
 		return;
 	}
 	r = r > 1.5 ? 1.5 : r < 0.6 ? 0.6 : r;
-	int base = cs.gain_base > 0 ? cs.gain_base : 256;
-	double again = (double)base / (base - cs.gain);
 	double want = cs.exposure * again * r;
-	double top = (double)base / (base - cs.gain_max);
 	int longest = cs.line > 0 && cs.rate > 0 ? (int)((double)cs.rate / CAMSS_SLOWEST_FPS / cs.line) : cs.exposure_base;
 	if (longest < cs.exposure_base) {
 		longest = cs.exposure_base;
@@ -358,20 +370,21 @@ static void camss_gather(const uint8_t *in, struct camss_planes *p, int sx, int 
 	const uint16_t *rows[2] = { row0, row1 };
 	const uint16_t *at_r = rows[cs.r_at >> 1] + (cs.r_at & 1), *at_b = rows[cs.b_at >> 1] + (cs.b_at & 1);
 	const uint16_t *at_g0 = rows[cs.g0_at >> 1] + (cs.g0_at & 1), *at_g1 = rows[cs.g1_at >> 1] + (cs.g1_at & 1);
-	/* Reading every row costs more than this CPU has to give. One row of cells a block, a
-	 * different one each frame: the blending below averages them over time instead. */
-	int cells_x = sx / 2 > 0 ? sx / 2 : 1, cells = cells_x, offset = p->frames % (sy / 2 > 0 ? sy / 2 : 1);
+	/* Reading every row costs more than this CPU has to give: one row of cells a block, and
+	 * always the same one, as another each frame made the picture shimmer. */
+	int cells_x = sx / 2 > 0 ? sx / 2 : 1, cells = cells_x;
 	int black = cs.black * 16;
 	bool first = p->frames == 0;
 	int weight = p->frames < CAMSS_BLEND ? p->frames : CAMSS_BLEND;
 	/* what counts as motion, above the noise: more of it in the dark */
 	int moved = 48 + 8 * (cs.gain * 8 / (cs.gain_base > 0 ? cs.gain_base : 256));
-	long long sum_r = 0, sum_g = 0, sum_b = 0, n = 0;
+	long long sum_r = 0, sum_g = 0, sum_b = 0, n = 0, bright = 0;
+	int very = (cs.white - cs.black) * 16 * 9 / 10;
 	for (int iy = 0; iy < p->h; iy++) {
 		int16_t *pr = p->r + (size_t)iy * p->w, *pg = p->g + (size_t)iy * p->w, *pb = p->b + (size_t)iy * p->w;
 		memset(sums, 0, sizeof(int32_t) * 3 * p->w);
 		{
-			int y = iy * sy + offset * 2;
+			int y = iy * sy;
 			camss_unpack(in + (size_t)y * cs.pitch, row0, cs.w, copy);
 			camss_unpack(in + (size_t)(y + 1) * cs.pitch, row1, cs.w, copy);
 			int32_t *s = sums;
@@ -407,6 +420,7 @@ static void camss_gather(const uint8_t *in, struct camss_planes *p, int sx, int 
 				sum_r += r;
 				sum_g += g;
 				sum_b += b;
+				bright += g > very;
 				n++;
 			}
 		}
@@ -416,6 +430,7 @@ static void camss_gather(const uint8_t *in, struct camss_planes *p, int sx, int 
 		mean[0] = (double)sum_r / n / 16;
 		mean[1] = (double)sum_g / n / 16;
 		mean[2] = (double)sum_b / n / 16;
+		mean[3] = (double)bright / n;
 	}
 	free(sums);
 	free(copy);
@@ -488,7 +503,7 @@ static void camss_render(struct camss_planes *p, cairo_surface_t *surface) {
 	}
 	static const double wb[5][2] = { { 1, 1 }, { 2.0, 1.25 }, { 1.8, 1.5 }, { 1.5, 1.9 }, { 1.2, 2.4 } };
 	double wr = ui.ctl[0] ? wb[ui.ctl[0]][0] : cs.wb_r, wbl = ui.ctl[0] ? wb[ui.ctl[0]][1] : cs.wb_b;
-	double ev = pow(2.0, (ui.ctl[4] - 6) * 0.5);
+	double ev = pow(2.0, (ui.ctl[4] - 6) * 0.5) * (cs.digital > 1 ? cs.digital : 1);
 	/* 16 times 10 bits above black, to the 12 bits of the curve; 256 is one */
 	double range = 4095.0 / ((cs.white - cs.black) * 16.0);
 	int kg = (int)(range * ev * 256), kr = (int)(range * ev * wr * 256), kb = (int)(range * ev * wbl * 256);
@@ -568,7 +583,7 @@ static void camss_develop(const uint8_t *in, cairo_surface_t *surface) {
 	if (!camss_planes_size(&cs_preview, cols, rows)) {
 		return;
 	}
-	double mean[3] = { 0, 0, 0 };
+	double mean[4] = { 0, 0, 0, 0 };
 	camss_gather(in, &cs_preview, sx, sy, mean);
 	camss_render(&cs_preview, surface);
 	if (mean[1] > 0 && !ui.ctl[0] && mean[0] > 1 && mean[2] > 1) {
@@ -579,7 +594,7 @@ static void camss_develop(const uint8_t *in, cairo_surface_t *surface) {
 		cs.wb_b += (tb - cs.wb_b) * 0.08;
 	}
 	if (!(cs.seq % 4)) {
-		camss_expose(mean[1]);
+		camss_expose(mean[1], mean[3]);
 	}
 	cs.seq++;
 }
