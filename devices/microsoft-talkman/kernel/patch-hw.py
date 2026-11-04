@@ -25,6 +25,70 @@ PCIE = "drivers/pci/controller/dwc/pcie-qcom.c"
 GCC_IDS = "include/dt-bindings/clock/qcom,gcc-msm8994.h"
 PAS = "drivers/remoteproc/qcom_q6v5_pas.c"
 
+TSL = "drivers/iio/light/tsl2772.c"
+
+# The proximity sensor's infrared LED pulses all the time once the driver has started the chip,
+# which can be seen in a camera, and costs power for nothing. On only while something reads it.
+TSL_HELPERS = """static u8 tsl2772_control(struct tsl2772_chip *chip)
+{
+	u8 reg_val = TSL2772_CNTL_PWR_ON | TSL2772_CNTL_ADC_ENBL;
+
+	if (chip->prox_on || chip->settings.prox_interrupt_en)
+		reg_val |= TSL2772_CNTL_PROX_DET_ENBL;
+	if (chip->settings.als_interrupt_en)
+		reg_val |= TSL2772_CNTL_ALS_INT_ENBL;
+	if (chip->settings.prox_interrupt_en)
+		reg_val |= TSL2772_CNTL_PROX_INT_ENBL;
+	return reg_val;
+}
+
+static void tsl2772_prox_off_work(struct work_struct *work)
+{
+	struct tsl2772_chip *chip = container_of(to_delayed_work(work), struct tsl2772_chip, prox_off);
+
+	mutex_lock(&chip->prox_mutex);
+	if (chip->prox_on && chip->tsl2772_chip_status == TSL2772_CHIP_WORKING) {
+		chip->prox_on = false;
+		tsl2772_write_control_reg(chip, tsl2772_control(chip));
+	}
+	mutex_unlock(&chip->prox_mutex);
+}
+
+"""
+
+TSL_EDITS = [
+    ("\tu16 prox_data;\n", "\tu16 prox_data;\n\tbool prox_on;\n\tstruct delayed_work prox_off;\n"),
+    ("static int tsl2772_write_control_reg(struct tsl2772_chip *chip, u8 data)\n{",
+     "static int tsl2772_write_control_reg(struct tsl2772_chip *chip, u8 data);\n"
+     "static u8 tsl2772_control(struct tsl2772_chip *chip);\n\n"
+     "static int tsl2772_write_control_reg(struct tsl2772_chip *chip, u8 data)\n{"),
+    ("\treg_val = TSL2772_CNTL_PWR_ON | TSL2772_CNTL_ADC_ENBL |\n"
+     "\t\t  TSL2772_CNTL_PROX_DET_ENBL;\n"
+     "\tif (chip->settings.als_interrupt_en)\n"
+     "\t\treg_val |= TSL2772_CNTL_ALS_INT_ENBL;\n"
+     "\tif (chip->settings.prox_interrupt_en)\n"
+     "\t\treg_val |= TSL2772_CNTL_PROX_INT_ENBL;\n",
+     "\tchip->prox_on = false;\n\treg_val = tsl2772_control(chip);\n"),
+    ("\t/* turn device off */\n\tchip->tsl2772_chip_status = TSL2772_CHIP_SUSPENDED;\n",
+     "\t/* turn device off */\n\tchip->prox_on = false;\n\tchip->tsl2772_chip_status = TSL2772_CHIP_SUSPENDED;\n"),
+    ("static int tsl2772_read_raw(struct iio_dev *indio_dev,\n", TSL_HELPERS + "static int tsl2772_read_raw(struct iio_dev *indio_dev,\n"),
+    ("\t\t\ttsl2772_get_prox(indio_dev);\n\t\t\t*val = chip->prox_data;\n",
+     "\t\t\tmutex_lock(&chip->prox_mutex);\n"
+     "\t\t\tif (!chip->prox_on) {\n"
+     "\t\t\t\tchip->prox_on = true;\n"
+     "\t\t\t\ttsl2772_write_control_reg(chip, tsl2772_control(chip));\n"
+     "\t\t\t\tmsleep(250);\t/* a whole measuring cycle */\n"
+     "\t\t\t}\n"
+     "\t\t\tmutex_unlock(&chip->prox_mutex);\n"
+     "\t\t\tmod_delayed_work(system_wq, &chip->prox_off, 2 * HZ);\n"
+     "\t\t\ttsl2772_get_prox(indio_dev);\n\t\t\t*val = chip->prox_data;\n"),
+    ("\tmutex_init(&chip->prox_mutex);\n",
+     "\tmutex_init(&chip->prox_mutex);\n\tINIT_DELAYED_WORK(&chip->prox_off, tsl2772_prox_off_work);\n"),
+    ("\ttsl2772_chip_off(indio_dev);\n}", "\tstruct tsl2772_chip *chip = iio_priv(indio_dev);\n\n"
+     "\tcancel_delayed_work_sync(&chip->prox_off);\n\ttsl2772_chip_off(indio_dev);\n}"),
+    ("#include <linux/delay.h>\n", "#include <linux/delay.h>\n#include <linux/workqueue.h>\n"),
+]
+
 PAS_EDITS = [
     # The crypto engine's clock, taken only now and at the downstream kernel's 85.71 MHz: the
     # driver's second clock from here on, which it turns off when the DSP has taken over
@@ -304,6 +368,7 @@ def main():
     edit(source / GCC_IDS, [("#define MSS_RESET\t\t\t\t5\n", "#define MSS_RESET\t\t\t\t5\n#define PCIE_0_CORE_RESET\t\t6\n")])
     edit(source / PCIE, PCIE_EDITS)
     edit(source / PAS, PAS_EDITS)
+    edit(source / TSL, TSL_EDITS)
 
     imu = source / "drivers/iio/imu"
     shutil.copy(HERE / "drivers/icm20x48.c", imu)
