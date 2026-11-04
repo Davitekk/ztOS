@@ -40,8 +40,8 @@ W, P, B, U = "working", "partial", "broken", "untested"
 FEATURES = [
     ("Boot", "Booting from internal storage", P, "Works, but the power controller does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes"),
     ("Display", "Panel", W, "1440x2560 dual-DSI command-mode AMOLED at 60 Hz"),
-    ("Display", "Brightness", W, "The shell's slider works; ztOSIAL's self-test reports a write error"),
-    ("Display", "GPU", W, "Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at about 60 fps"),
+    ("Display", "Brightness", W, ""),
+    ("Display", "GPU", W, "Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps"),
     ("Input", "Touchscreen", W, "Synaptics S3708"),
     ("Input", "Power and volume keys", W, ""),
     ("Input", "Vibration", B, "Not started: no device shows up"),
@@ -58,9 +58,9 @@ FEATURES = [
     ("Audio", "Speaker", B, "No sound card. Starting the audio DSP with its firmware restarts the phone at once"),
     ("Audio", "Microphone", B, "As the speaker"),
     ("Audio", "Headphones", B, "As the speaker"),
-    ("Sensors", "Ambient light", U, "The chip is found, but it read 0 when tried"),
+    ("Sensors", "Ambient light", U, "The chip is found and ztOSIAL reads it, but it read 0 in a lit room"),
     ("Sensors", "Accelerometer, gyroscope", B, "MPU-6500 answers whoami 0x00"),
-    ("Sensors", "Proximity", U, "The chip is found, but it read 0 when tried"),
+    ("Sensors", "Proximity", U, "The chip is found, but it read 0"),
     ("Sensors", "Magnetometer", P, "AK8975 reads through ztOSIAL; no calibration or mounting matrix"),
     ("Sensors", "Pressure", U, "ZPA2326 reads a value"),
     ("Camera", "Rear camera", P, "Real pictures through camss and ccs; preview about 6 fps, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced"),
@@ -69,7 +69,7 @@ FEATURES = [
     ("Location", "GPS", B, "Depends on the modem"),
     ("Software", "ztMETRO", W, "About 60 fps while scrolling"),
     ("Software", "Android apps (Waydroid)", U, "With no Wi-Fi, its first-start download has no network"),
-    ("Software", "ztOSIAL (ztos-ial test)", P, "16 of 19 passed: no cpufreq clusters, and the brightness and light-sensor checks failed"),
+    ("Software", "ztOSIAL (ztos-ial test)", P, "All but one check passed on a fresh install; the one that fails looks for cpufreq clusters"),
 ]
 NOTES = [
     ("It is not usable as a phone yet.", "There is no Wi-Fi, sound or modem. The only network is over the USB cable."),

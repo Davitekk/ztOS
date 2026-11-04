@@ -101,13 +101,17 @@ devices/microsoft-talkman/docker/run.sh --export out/ztos-talkman-boot.img out/z
 | Step | Time the first time, on 12 threads |
 |---|---|
 | The kernel | 5 to 10 minutes |
-| The system | about 20 minutes |
+| The system | about 15 minutes |
 | The rescue image and the export | a few minutes |
 
 By default the build uses 6 CPUs and 6 GB of memory, so the computer stays usable; with more
 to spare, set `ZTOS_BUILD_CPUS=12 ZTOS_BUILD_MEM=14g` first and it goes much faster.
 Everything builds in a Docker volume (`ztos-talkman-build`) that is kept between runs. The
 exported files land in `out/` and `build/ztos/talkman/`.
+
+**Building again after changing something:** add `--fresh` to the `installer/ztos build` command.
+Without it the build reuses the system image it already has, finishes in a minute, and your
+changes outside the kernel are not in it.
 
 ### 8. Install it
 
@@ -128,13 +132,18 @@ python devices/microsoft-talkman/tools/install-talkman.py --root build/ztos/talk
 ```
 
 It writes the new partition table (keeping the old one in the backup folder), writes the system
-over USB and reads it back (15 to 30 minutes), then flashes the boot image and restarts. It
+over USB and reads it back (about 15 minutes), then flashes the boot image and restarts. It
 stops at the first thing that does not match. If the cable comes out, start again from
-`fastboot boot`.
+`fastboot boot`. Your computer's copy of `root.img` is 10 GB.
+
+If the script reports that the phone does not respond, the power controller may not have answered
+on that start (see step 9). Send `reboot -f` over the phone's shell, or hold Power for 15 seconds,
+then repeat `fastboot boot`.
 
 ### 9. Start ztOS
 
-The first start takes a few minutes, and the screen may stay black for up to 2 minutes:
+The first start usually reaches the shell in about a minute, but the screen may stay black for
+up to 2 minutes:
 
 - On about half of all starts the phone's power controller does not answer. The boot stage
   notices and restarts by itself, sometimes more than once. Each try vibrates.
@@ -142,6 +151,9 @@ The first start takes a few minutes, and the screen may stay black for up to 2 m
 
 Then the shell appears. Over the USB cable you can also log in: `ssh YOURNAME@172.16.42.1`,
 and a serial console appears as a COM port.
+
+The default build in this guide was rebuilt from scratch and installed on the test phone with
+these steps on 2026-11-04. It reached the shell, and scrolling Start measured 59.8 fps.
 
 ### If something goes wrong
 

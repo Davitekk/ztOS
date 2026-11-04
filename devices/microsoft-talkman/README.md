@@ -8,7 +8,7 @@ pictures, but **there is no Wi-Fi, sound or modem yet**, so it is not usable as 
 
 ## Status
 
-Tried on one phone, whose USB reports RM-1105. **Works**: tried, and does what it should.
+Tried on one phone, whose USB reports RM-1105, on a fresh install of this branch. **Works**: tried, and does what it should.
 **Partial**: some of it works; the notes say what. **Untested**: written or detected, not tried
 with real use. **Not working**: tried and failing, or not started; the notes say which.
 
@@ -18,7 +18,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 |---|---|---|---|
 | Boot | Booting from internal storage | Partial | Works, but the power controller (RPM) does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes. Cause unknown |
 | Display | Panel, 1440x2560 | Works | Dual-DSI command-mode AMOLED at 60 Hz, clean picture |
-| Display | Brightness | Works | ztOSIAL's own self-test reports a write error here; the shell's slider works |
+| Display | Brightness | Works | |
 | Display | GPU | Works | Adreno 418 run as A430 (freedreno, GLES 3.0). Scrolling Start measured at about 60 fps |
 | Input | Touchscreen | Works | Synaptics S3708 |
 | Input | Power and volume keys | Works | |
@@ -37,7 +37,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
-| Sensors | Ambient light, proximity | Untested | The chip is found, but it read 0 when tried |
+| Sensors | Ambient light, proximity | Untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
 | Sensors | Accelerometer, gyroscope | Not working | MPU-6500 answers `whoami 0x00` |
 | Other | FM radio, NFC | Untested | Devices appear |
 | Location | GPS | Not working | Depends on the modem |
@@ -48,10 +48,10 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 
 | Feature | Status | Notes |
 |---|---|---|
-| ztMETRO, the shell | Works | About 60 fps while scrolling, 2 late frames in 90 s |
+| ztMETRO, the shell | Works | 59.8 fps while scrolling Start, measured on a fresh install; 2 late frames in 30 s |
 | ztCamera | Partial | Live viewfinder, front and rear switch, photos |
 | Android apps (Waydroid) | Untested | With no Wi-Fi, its first-start download has no network |
-| ztOSIAL (`ztos-ial test`) | Partial | 16 of 19 passed: no cpufreq clusters, and the brightness and light-sensor checks failed |
+| ztOSIAL (`ztos-ial test`) | Partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
 ## How it is made
 

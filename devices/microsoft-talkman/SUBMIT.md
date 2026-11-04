@@ -44,8 +44,8 @@ The form starts with a list of features: set each one as below, and use
 |---|---|---|---|
 | Boot | Booting from internal storage | partial | Works, but the power controller does not answer on about half of all starts; the boot stage restarts by itself, so a start can take 2 minutes |
 | Display | Panel | working | 1440x2560 dual-DSI command-mode AMOLED at 60 Hz |
-| Display | Brightness | working | The shell's slider works; ztOSIAL's self-test reports a write error |
-| Display | GPU | working | Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at about 60 fps |
+| Display | Brightness | working |  |
+| Display | GPU | working | Adreno 418 run as A430, freedreno, GLES 3.0. Scrolling Start measured at 59.8 fps |
 | Input | Touchscreen | working | Synaptics S3708 |
 | Input | Power and volume keys | working |  |
 | Input | Vibration | broken | Not started: no device shows up |
@@ -62,9 +62,9 @@ The form starts with a list of features: set each one as below, and use
 | Audio | Speaker | broken | No sound card. Starting the audio DSP with its firmware restarts the phone at once |
 | Audio | Microphone | broken | As the speaker |
 | Audio | Headphones | broken | As the speaker |
-| Sensors | Ambient light | untested | The chip is found, but it read 0 when tried |
+| Sensors | Ambient light | untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
 | Sensors | Accelerometer, gyroscope | broken | MPU-6500 answers whoami 0x00 |
-| Sensors | Proximity | untested | The chip is found, but it read 0 when tried |
+| Sensors | Proximity | untested | The chip is found, but it read 0 |
 | Sensors | Magnetometer | partial | AK8975 reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | untested | ZPA2326 reads a value |
 | Camera | Rear camera | partial | Real pictures through camss and ccs; preview about 6 fps, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced |
@@ -73,7 +73,7 @@ The form starts with a list of features: set each one as below, and use
 | Location | GPS | broken | Depends on the modem |
 | Software | ztMETRO | working | About 60 fps while scrolling |
 | Software | Android apps (Waydroid) | untested | With no Wi-Fi, its first-start download has no network |
-| Software | ztOSIAL (ztos-ial test) | partial | 16 of 19 passed: no cpufreq clusters, and the brightness and light-sensor checks failed |
+| Software | ztOSIAL (ztos-ial test) | partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
 
 ## Known quirks
 
@@ -84,7 +84,7 @@ The form starts with a list of features: set each one as below, and use
 - **Do not press both volume keys in LK.** That enters emergency download mode.
 - **Never write the DPP partition.** It holds calibration that cannot be had back. The install scripts leave it alone.
 
-## Installation guide (7968 of 30000 characters)
+## Installation guide (8680 of 30000 characters)
 
 Paste everything between the two fences:
 
@@ -192,13 +192,17 @@ devices/microsoft-talkman/docker/run.sh --export out/ztos-talkman-boot.img out/z
 | Step | Time the first time, on 12 threads |
 |---|---|
 | The kernel | 5 to 10 minutes |
-| The system | about 20 minutes |
+| The system | about 15 minutes |
 | The rescue image and the export | a few minutes |
 
 By default the build uses 6 CPUs and 6 GB of memory, so the computer stays usable; with more
 to spare, set `ZTOS_BUILD_CPUS=12 ZTOS_BUILD_MEM=14g` first and it goes much faster.
 Everything builds in a Docker volume (`ztos-talkman-build`) that is kept between runs. The
 exported files land in `out/` and `build/ztos/talkman/`.
+
+**Building again after changing something:** add `--fresh` to the `installer/ztos build` command.
+Without it the build reuses the system image it already has, finishes in a minute, and your
+changes outside the kernel are not in it.
 
 ### 8. Install it
 
@@ -219,13 +223,18 @@ python devices/microsoft-talkman/tools/install-talkman.py --root build/ztos/talk
 ```
 
 It writes the new partition table (keeping the old one in the backup folder), writes the system
-over USB and reads it back (15 to 30 minutes), then flashes the boot image and restarts. It
+over USB and reads it back (about 15 minutes), then flashes the boot image and restarts. It
 stops at the first thing that does not match. If the cable comes out, start again from
-`fastboot boot`.
+`fastboot boot`. Your computer's copy of `root.img` is 10 GB.
+
+If the script reports that the phone does not respond, the power controller may not have answered
+on that start (see step 9). Send `reboot -f` over the phone's shell, or hold Power for 15 seconds,
+then repeat `fastboot boot`.
 
 ### 9. Start ztOS
 
-The first start takes a few minutes, and the screen may stay black for up to 2 minutes:
+The first start usually reaches the shell in about a minute, but the screen may stay black for
+up to 2 minutes:
 
 - On about half of all starts the phone's power controller does not answer. The boot stage
   notices and restarts by itself, sometimes more than once. Each try vibrates.
@@ -233,6 +242,9 @@ The first start takes a few minutes, and the screen may stay black for up to 2 m
 
 Then the shell appears. Over the USB cable you can also log in: `ssh YOURNAME@172.16.42.1`,
 and a serial console appears as a COM port.
+
+The default build in this guide was rebuilt from scratch and installed on the test phone with
+these steps on 2026-11-04. It reached the shell, and scrolling Start measured 59.8 fps.
 
 ### If something goes wrong
 
