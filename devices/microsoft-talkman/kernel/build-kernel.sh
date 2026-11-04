@@ -49,6 +49,9 @@ python3 "$HERE/patch-mmcc-gpu.py" "$SRC"
 python3 "$HERE/patch-gpu-a418.py" "$SRC"
 python3 "$HERE/patch-camera-key.py" "$SRC"
 python3 "$HERE/patch-dwc3-usb-sel.py" "$SRC"
+python3 "$HERE/patch-msm-hw-done.py" "$SRC"
+python3 "$HERE/patch-panel-clock.py" "$SRC"
+python3 "$HERE/patch-camera.py" "$SRC"
 
 mkdir -p "$OUT"
 M=(make -C "$SRC" O="$OUT" ARCH=arm64 LLVM=1 KBUILD_BUILD_USER=ztos KBUILD_BUILD_HOST=ztos)

@@ -1,0 +1,65 @@
+#!/bin/sh
+# ztCamera asks this for a camera: ztcamera-route <rear|front> <preview|photo>
+# It sets up the sensor's route through camss and says what the frames will look like, one
+# key=value a line. All of what is particular to the Lumia 950's cameras is here.
+#
+# The VFE cannot take the sensors' full rate over its bus (the write master overflows and
+# rows go missing), so a preview is scaled down on the sensor, and a photo at full size
+# runs with the longest horizontal blanking there is, about one frame a second on the rear.
+# csid0 for both: camss wants a VFE per CSID and this chip has two VFEs for four CSIDs.
+set -e
+M=/dev/media0
+case $1 in
+rear)
+	bus=7 phy=msm_csiphy0 code=SRGGB14_1X14 fmt=pREE bits=14 order=RGGB
+	full=5344x4016 small=1328x992 hb_preview=680 hb_photo=27408
+	rotate=90 mirror=0 extra=0 black=64 white=1023 gain_base=512
+	;;
+front)
+	# it sends 2608 pixels a row for its 2600
+	bus=6 phy=msm_csiphy2 code=SGRBG10_1X10 fmt=pgAA bits=10 order=GRBG
+	full=2600x1952 small=1296x1952 hb_preview=150 hb_photo=13783
+	rotate=270 mirror=1 extra=8 black=64 white=1023 gain_base=256
+	;;
+*)
+	echo "usage: $0 <rear|front> <preview|photo>" >&2
+	exit 2
+	;;
+esac
+case $2 in
+preview) size=$small hb=$hb_preview ;;
+photo) size=$full hb=$hb_photo ;;
+*) echo "usage: $0 <rear|front> <preview|photo>" >&2; exit 2 ;;
+esac
+
+node() { media-ctl -d $M -e "$1"; }
+array=$(node "smiapp pixel_array $bus-0010")
+video=$(node msm_vfe0_video0)
+
+media-ctl -d $M -r
+media-ctl -d $M -l "\"$phy\":1->\"msm_csid0\":0[1],\"msm_csid0\":1->\"msm_ispif0\":0[1],\"msm_ispif0\":1->\"msm_vfe0_rdi0\":0[1]"
+media-ctl -d $M -V "\"smiapp scaler $bus-0010\":0[compose:(0,0)/$size]"
+# the sizes the sensor can make are its to choose
+size=$(media-ctl -d $M --get-v4l2 "\"smiapp scaler $bus-0010\":1" | head -n 1 | sed -E 's/.*fmt:[A-Z0-9_]+\/([0-9]+x[0-9]+).*/\1/')
+f="fmt:$code/$size"
+media-ctl -d $M -V "\"$phy\":0[$f],\"msm_csid0\":0[$f],\"msm_ispif0\":0[$f],\"msm_vfe0_rdi0\":0[$f]"
+v4l2-ctl -d "$array" -c test_pattern=0 -c horizontal_blanking=$hb
+
+w=${size%x*}
+h=${size#*x}
+echo "video=$video"
+echo "subdev=$array"
+echo "fmt=$fmt"
+echo "w=$w"
+echo "h=$h"
+# rows in memory are as sent, padded to 8 bytes, whatever bytesperline says
+echo "pitch=$(( (((w + extra) * bits / 8) + 7) / 8 * 8 ))"
+echo "bits=$bits"
+echo "order=$order"
+echo "rotate=$rotate"
+echo "mirror=$mirror"
+echo "black=$black"
+echo "white=$white"
+echo "gain_base=$gain_base"
+echo "line=$(( ${full%x*} + hb ))"
+echo "rate=$(v4l2-ctl -d "$array" --get-ctrl=pixel_rate | cut -d' ' -f2)"

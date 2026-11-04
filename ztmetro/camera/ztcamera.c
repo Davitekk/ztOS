@@ -28,11 +28,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sched.h>
+#include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -56,7 +59,7 @@
 #define N_CONTROLS	5
 #define ROLL_DIR	"ztCamera"	/* ~/Pictures/ztCamera, where captures go */
 
-enum source_kind { SRC_SCENE, SRC_REPLAY, SRC_V4L2, SRC_RAW };
+enum source_kind { SRC_SCENE, SRC_REPLAY, SRC_V4L2, SRC_RAW, SRC_CAMSS };
 enum mode { MODE_PHOTO, MODE_VIDEO };
 enum hit { HIT_NONE, HIT_BACK, HIT_MORE, HIT_CONTROL, HIT_SHUTTER, HIT_VIDEO,
 	HIT_FACING, HIT_LENSES, HIT_THUMB, HIT_DIAL, HIT_MENU, HIT_VIEW };
@@ -132,6 +135,7 @@ static const char *device_path;
 
 static void note(const char *fmt, ...);
 #include "raw-source.h"
+#include "camss-source.h"
 
 /* ---- where things sit, in points ----------------------------------------- */
 
@@ -253,8 +257,12 @@ static void frame_alloc(int w, int h) {
 	src.rev++;
 }
 
+static void camss_watch(bool on);
+
 static void source_stop(void) {
 	raw_close();
+	camss_watch(false);
+	camss_close();
 	if (src.fd >= 0) {
 		zmc_watch_fd(src.fd, NULL, NULL);
 		if (src.nbuf) {
@@ -387,6 +395,20 @@ static void source_start(enum source_kind want) {
 		}
 		note("%s", raw.cam == RAW_IR ? "IR camera: the sensor does not answer yet"
 			: "no camera driver (" RAW_DEV ")");
+		/* fall through */
+	case SRC_CAMSS:
+		if (want == SRC_CAMSS) {
+			if (camss_open(ui.front ? CAMSS_FRONT : CAMSS_REAR)) {
+				int w, h;
+				src.kind = SRC_CAMSS;
+				camss_size(0, &w, &h);
+				frame_alloc(w, h);
+				snprintf(src.name, sizeof(src.name), "%s raw, no ISP", ui.front ? "front" : "rear");
+				camss_watch(true);
+				break;
+			}
+			note("the %s camera did not start", ui.front ? "front" : "rear");
+		}
 		/* fall through */
 	case SRC_V4L2:
 		if (device_path && v4l2_open(device_path)) {
@@ -700,6 +722,19 @@ static void capture_photo(void) {
 		}
 		note("taking a photo");
 		shot = raw_capture();
+		if (!shot) {
+			note("could not take a photo");
+			return;
+		}
+	} else if (src.kind == SRC_CAMSS) {
+		if (!cs.seq) {
+			note("no frame yet");
+			return;
+		}
+		note("taking a photo");
+		camss_watch(false);
+		shot = camss_capture();
+		camss_watch(true);
 		if (!shot) {
 			note("could not take a photo");
 			return;
@@ -1500,6 +1535,8 @@ static void source_cycle(void) {
 	if (src.kind == SRC_SCENE && !replay_path && !device_path && access(RAW_DEV, F_OK) == 0) {
 		raw.cam = RAW_REAR;
 		source_start(SRC_RAW);
+	} else if (src.kind == SRC_SCENE && !replay_path && !device_path && camss_available()) {
+		source_start(SRC_CAMSS);
 	} else if (src.kind == SRC_SCENE) {
 		if (replay_path) {
 			source_start(SRC_REPLAY);
@@ -1536,6 +1573,11 @@ static void aperture_toggle(void) {
 }
 
 static void facing_toggle(void) {
+	if (src.kind == SRC_CAMSS) {
+		ui.front = !ui.front;
+		source_start(SRC_CAMSS);
+		return;
+	}
 	static bool ir_parked;	/* IR has no picture yet: the test scene shows, the next tap is rear */
 	if (src.kind == SRC_RAW || ir_parked) {
 		/* rear, front, IR, each from the one before */
@@ -1874,6 +1916,36 @@ static void v4l2_ready(int fd, void *data) {
 	zmc_present();
 }
 
+static void camss_ready(int fd, void *data) {
+	struct v4l2_buffer b;
+	struct v4l2_plane plane;
+	int i = camss_dequeue(&b, &plane);
+	if (i == -1) {
+		return;
+	}
+	if (i >= 0 && cs.buf[i].len >= (size_t)cs.pitch * cs.h) {
+		camss_worker_give(&b, i);
+	} else {
+		camss_requeue(&b);
+	}
+}
+
+static void camss_done(int fd, void *data) {
+	src.frame = camss_worker_collect(src.frame);
+	src.rev++;
+	frame_arrived();
+	zmc_present();
+}
+
+static void camss_watch(bool on) {
+	if (cs.fd >= 0) {
+		zmc_watch_fd(cs.fd, on ? camss_ready : NULL, NULL);
+	}
+	if (cs.done_fd >= 0) {
+		zmc_watch_fd(cs.done_fd, on ? camss_done : NULL, NULL);
+	}
+}
+
 /* ---- running ---------------------------------------------------------------- */
 
 static double render(cairo_t *cr, int page) {
@@ -1906,7 +1978,7 @@ static void arrived(int page) {
 	roll_scan();
 	thumb_load();
 	source_start(device_path ? SRC_V4L2 : replay_path ? SRC_REPLAY :
-		access(RAW_DEV, F_OK) == 0 ? SRC_RAW : SRC_SCENE);
+		access(RAW_DEV, F_OK) == 0 ? SRC_RAW : camss_available() ? SRC_CAMSS : SRC_SCENE);
 	if (src.kind == SRC_SCENE) {
 		snprintf(src.name, sizeof(src.name), "test scene 640x480");
 	}
@@ -2015,7 +2087,8 @@ int main(int argc, char **argv) {
 		if (dial_arg < -1 || dial_arg >= N_CONTROLS) return 2;
 		return render_png(out_png, dial_arg);
 	}
-	if (!device_path && !replay_path && access("/dev/video0", R_OK | W_OK) == 0) {
+	/* behind camss, /dev/video0 is one stage of a graph and no webcam */
+	if (!device_path && !replay_path && !camss_available() && access("/dev/video0", R_OK | W_OK) == 0) {
 		device_path = "/dev/video0";
 	}
 	int status = zmc_run(&camera, 0);

@@ -1,0 +1,287 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * The Lumia 950's cameras. The camss and cci nodes are from Android4Lumia950/linux, branch
+ * camss, checked against the registers in its downstream msm8992-camera.dtsi.
+ *
+ * Rear ("Hill", on CCI1 and CSI0, four lanes). Its reset is not on the main board's
+ * camera connector, so no GPIO is driven and ccs resets it over I2C.
+ * Front ("Ducati", on CCI0 and CSI2 lanes 0-1, two lanes), MCLK2 on GPIO 15, reset GPIO 104.
+ *
+ * Not here yet: the iris camera ("Siiri", CCI0, MCLK1 on GPIO 14, reset GPIO 102), one data
+ * lane on CSI2's lanes 2-3, which share the PHY with the front camera, and the flash.
+ *
+ * The addresses are 7-bit: 0x20 in Qualcomm's downstream files is this address shifted.
+ *
+ * The rails are all always on (see msm8994-msft-lumia-octagon.dtsi): naming one here
+ * does not change what reaches the sensor, which is fixed by the board.
+ */
+
+&soc {
+	camss: camss@fda0ac00 {
+		compatible = "qcom,msm8994-camss";
+		reg = <0xfda0ac00 0x200>,
+		      <0xfda00030 0x4>,
+		      <0xfda0b000 0x200>,
+		      <0xfda00038 0x4>,
+		      <0xfda0b400 0x200>,
+		      <0xfda00040 0x4>,
+		      <0xfda08000 0x400>,
+		      <0xfda08400 0x400>,
+		      <0xfda08800 0x400>,
+		      <0xfda08c00 0x100>,
+		      <0xfda0a000 0x500>,
+		      <0xfda00020 0x10>,
+		      <0xfda10000 0x1000>,
+		      <0xfda14000 0x1000>,
+		      <0xfda40000 0x200>;
+		reg-names = "csiphy0",
+			    "csiphy0_clk_mux",
+			    "csiphy1",
+			    "csiphy1_clk_mux",
+			    "csiphy2",
+			    "csiphy2_clk_mux",
+			    "csid0",
+			    "csid1",
+			    "csid2",
+			    "csid3",
+			    "ispif",
+			    "csi_clk_mux",
+			    "vfe0",
+			    "vfe1",
+			    "vfe0_vbif";
+		interrupts = <GIC_SPI 78 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 79 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 80 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 51 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 52 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 53 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 54 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 55 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 57 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 58 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "csiphy0",
+				  "csiphy1",
+				  "csiphy2",
+				  "csid0",
+				  "csid1",
+				  "csid2",
+				  "csid3",
+				  "ispif",
+				  "vfe0",
+				  "vfe1";
+		power-domains = <&mmcc VFE_GDSC>;
+		clocks = <&mmcc CAMSS_TOP_AHB_CLK>,
+			 <&mmcc CAMSS_ISPIF_AHB_CLK>,
+			 <&mmcc CAMSS_PHY0_CSI0PHYTIMER_CLK>,
+			 <&mmcc CAMSS_PHY1_CSI1PHYTIMER_CLK>,
+			 <&mmcc CAMSS_PHY2_CSI2PHYTIMER_CLK>,
+			 <&mmcc CAMSS_CSI0_AHB_CLK>,
+			 <&mmcc CAMSS_CSI0_CLK>,
+			 <&mmcc CAMSS_CSI0PHY_CLK>,
+			 <&mmcc CAMSS_CSI0PIX_CLK>,
+			 <&mmcc CAMSS_CSI0RDI_CLK>,
+			 <&mmcc CAMSS_CSI1_AHB_CLK>,
+			 <&mmcc CAMSS_CSI1_CLK>,
+			 <&mmcc CAMSS_CSI1PHY_CLK>,
+			 <&mmcc CAMSS_CSI1PIX_CLK>,
+			 <&mmcc CAMSS_CSI1RDI_CLK>,
+			 <&mmcc CAMSS_CSI2_AHB_CLK>,
+			 <&mmcc CAMSS_CSI2_CLK>,
+			 <&mmcc CAMSS_CSI2PHY_CLK>,
+			 <&mmcc CAMSS_CSI2PIX_CLK>,
+			 <&mmcc CAMSS_CSI2RDI_CLK>,
+			 <&mmcc CAMSS_CSI3_AHB_CLK>,
+			 <&mmcc CAMSS_CSI3_CLK>,
+			 <&mmcc CAMSS_CSI3PHY_CLK>,
+			 <&mmcc CAMSS_CSI3PIX_CLK>,
+			 <&mmcc CAMSS_CSI3RDI_CLK>,
+			 <&mmcc CAMSS_AHB_CLK>,
+			 <&mmcc CAMSS_VFE_VFE0_CLK>,
+			 <&mmcc CAMSS_CSI_VFE0_CLK>,
+			 <&mmcc CAMSS_VFE_VFE1_CLK>,
+			 <&mmcc CAMSS_CSI_VFE1_CLK>,
+			 <&mmcc CAMSS_VFE_VFE_AHB_CLK>,
+			 <&mmcc CAMSS_VFE_VFE_AXI_CLK>;
+		clock-names = "top_ahb",
+			      "ispif_ahb",
+			      "csiphy0_timer",
+			      "csiphy1_timer",
+			      "csiphy2_timer",
+			      "csi0_ahb",
+			      "csi0",
+			      "csi0_phy",
+			      "csi0_pix",
+			      "csi0_rdi",
+			      "csi1_ahb",
+			      "csi1",
+			      "csi1_phy",
+			      "csi1_pix",
+			      "csi1_rdi",
+			      "csi2_ahb",
+			      "csi2",
+			      "csi2_phy",
+			      "csi2_pix",
+			      "csi2_rdi",
+			      "csi3_ahb",
+			      "csi3",
+			      "csi3_phy",
+			      "csi3_pix",
+			      "csi3_rdi",
+			      "ahb",
+			      "vfe0",
+			      "csi_vfe0",
+			      "vfe1",
+			      "csi_vfe1",
+			      "vfe_ahb",
+			      "vfe_axi";
+		vdda-supply = <&vreg_l2a_1p25>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				csiphy0_ep: endpoint {
+					clock-lanes = <1>;
+					/* as wired: found by trying each order on a running stream */
+					data-lanes = <3 2 4 0>;
+					remote-endpoint = <&rear_ep>;
+				};
+			};
+
+			port@2 {
+				reg = <2>;
+
+				csiphy2_ep: endpoint {
+					clock-lanes = <1>;
+					data-lanes = <0 2>;
+					remote-endpoint = <&front_ep>;
+				};
+			};
+		};
+	};
+
+	cci: cci@fda0c000 {
+		compatible = "qcom,msm8974-cci";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0xfda0c000 0x1000>;
+		interrupts = <GIC_SPI 50 IRQ_TYPE_EDGE_RISING>;
+		power-domains = <&mmcc CAMSS_TOP_GDSC>;
+		clocks = <&mmcc CAMSS_TOP_AHB_CLK>,
+			 <&mmcc CAMSS_CCI_CCI_AHB_CLK>,
+			 <&mmcc CAMSS_CCI_CCI_CLK>,
+			 <&mmcc CAMSS_AHB_CLK>;
+		clock-names = "camss_top_ahb",
+			      "cci_ahb",
+			      "cci",
+			      "camss_ahb";
+		assigned-clocks = <&mmcc CAMSS_CCI_CCI_AHB_CLK>,
+				  <&mmcc CAMSS_CCI_CCI_CLK>;
+		assigned-clock-rates = <19200000>, <37500000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cci_default>;
+
+		cci_i2c0: i2c-bus@0 {
+			reg = <0>;
+			clock-frequency = <100000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			front_sensor: camera@10 {
+				compatible = "nokia,smia";
+				reg = <0x10>;
+				vana-supply = <&vreg_l17a_2p7>;
+				vio-supply = <&vreg_lvs1a_1p8>;
+				clocks = <&mmcc CAMSS_MCLK2_CLK>;
+				clock-frequency = <19200000>;
+				/* CAM_FRONT_RES_N */
+				reset-gpios = <&tlmm 104 GPIO_ACTIVE_LOW>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&camera_front_default>;
+
+				port {
+					front_ep: endpoint {
+						data-lanes = <1 2>;
+						link-frequencies = /bits/ 64 <200000000 220000000 240000000 260000000 280000000 300000000 320000000 340000000 360000000 380000000 400000000 420000000 440000000 460000000 480000000 500000000 520000000 540000000 560000000 580000000 600000000 620000000 640000000 660000000 680000000 700000000 720000000 740000000>;
+						bus-type = <4>;
+						remote-endpoint = <&csiphy2_ep>;
+					};
+				};
+			};
+		};
+
+		cci_i2c1: i2c-bus@1 {
+			reg = <1>;
+			clock-frequency = <100000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			rear_sensor: camera@10 {
+				compatible = "nokia,smia";
+				reg = <0x10>;
+				vana-supply = <&vreg_l29a_2p8>;
+				vcore-supply = <&vreg_l25a_1p1>;
+				vio-supply = <&vreg_lvs1a_1p8>;
+				clocks = <&mmcc CAMSS_MCLK0_CLK>;
+				clock-frequency = <19200000>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&camera_rear_default>;
+
+				port {
+					rear_ep: endpoint {
+						data-lanes = <1 2 3 4>;
+						link-frequencies = /bits/ 64 <200000000 220000000 240000000 260000000 280000000 300000000 320000000 340000000 360000000 380000000 400000000 420000000 440000000 460000000 480000000 500000000 520000000 540000000 560000000 580000000 600000000 620000000 640000000 660000000 680000000 700000000 720000000 740000000>;
+						bus-type = <4>;
+						remote-endpoint = <&csiphy0_ep>;
+					};
+				};
+			};
+		};
+	};
+};
+
+&tlmm {
+	cci_default: cci-default-state {
+		cci-i2c0-pins {
+			pins = "gpio17", "gpio18";
+			function = "cci_i2c0";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+		cci-i2c1-pins {
+			pins = "gpio19", "gpio20";
+			function = "cci_i2c1";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	camera_rear_default: camera-rear-default-state {
+		mclk-pins {
+			pins = "gpio13";
+			function = "cam_mclk0";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	camera_front_default: camera-front-default-state {
+		mclk-pins {
+			pins = "gpio15";
+			function = "cam_mclk2";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+		reset-pins {
+			pins = "gpio104";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+};

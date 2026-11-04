@@ -36,7 +36,7 @@ SYSROOT=
 FIRMWARE=
 # driver_async_probe: the fuel gauge's probe takes 20 s and the light sensor's times
 # out in 6 s; started in the background, the kernel is up in 2 s rather than 26 s
-CMDLINE="console=tty0 loglevel=3 quiet panic=5 driver_async_probe=qcom-pmi8994-fg,tsl2772"
+CMDLINE="console=tty0 loglevel=3 quiet panic=5 cma=256M driver_async_probe=qcom-pmi8994-fg,tsl2772"
 while [ $# -gt 0 ]; do
 	case $1 in
 	--sysroot) SYSROOT=$2; shift ;;

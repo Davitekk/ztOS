@@ -184,6 +184,21 @@ static void detect_topology(void) {
 		}
 	}
 	globfree(&g);
+	/* No cpufreq driver (the Lumia 950 has none yet): the kernel still knows the
+	 * clusters, and without them cores_allowed() pinned every program to cpu0. Only the
+	 * first, though: the cores stay at the bootloader's clocks, and there the big cluster
+	 * ran at 191 MHz against the little one's 785. A thread on a big core runs four times
+	 * slower than on a "slow" one, and the scheduler has no way of knowing. */
+	if (n_clusters == 0) {
+		char path[96];
+		int cpus[16];
+		snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu0/topology/cluster_cpus_list");
+		if (read_cpu_list(path, cpus, 16) > 0) {
+			clusters[0] = cpus[0];
+			memcpy(cluster_cpus[0], cpus, sizeof(cluster_cpus[0]));
+			n_clusters = 1;
+		}
+	}
 	if (n_clusters == 0) { clusters[0] = 0; cluster_cpus[0][0] = 0; cluster_cpus[0][1] = -1; n_clusters = 1; }
 	/* every present cpu */
 	cpu_count = 0;
