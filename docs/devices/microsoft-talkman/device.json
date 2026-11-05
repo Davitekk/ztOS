@@ -168,7 +168,7 @@
       "category": "Audio",
       "feature": "Microphone",
       "status": "broken",
-      "notes": "Not started: the WCD9330 codec has no driver in this kernel"
+      "notes": "The WCD9330 codec answers and capture runs by hand, but every sample is 0. Off in a normal boot"
     },
     {
       "category": "Audio",

@@ -56,7 +56,7 @@ FEATURES = [
     ("Modem", "SMS", B, "As SIM and signal"),
     ("Modem", "Calls", B, "As SIM and signal"),
     ("Audio", "Speaker", W, "TAS2553 amp behind the audio DSP, through PipeWire"),
-    ("Audio", "Microphone", B, "Not started: the WCD9330 codec has no driver in this kernel"),
+    ("Audio", "Microphone", B, "The WCD9330 codec answers and capture runs by hand, but every sample is 0. Off in a normal boot"),
     ("Audio", "Headphones", B, "As the microphone"),
     ("Sensors", "Ambient light", W, "Auto brightness follows the room, with its switch in Settings. The lux scale is an estimate"),
     ("Sensors", "Accelerometer, gyroscope", P, "ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet"),

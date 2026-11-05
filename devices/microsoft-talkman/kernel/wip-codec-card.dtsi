@@ -1,0 +1,82 @@
+/*
+ * NOT BUILT. The sound card's links to the codec, for whoever carries on with the microphones.
+ *
+ * To try it: append this to hw-talkman.dtsi, then, on the phone, once the audio DSP is up:
+ *
+ *	D=/sys/bus/platform/devices/fe12f000.slim-ngd
+ *	echo 1 > $D/ngd_hw; echo 1 > $D/ngd_up
+ *	amixer -c0 cset name='MultiMedia2 Mixer SLIMBUS_0_TX' 1
+ *	arecord -D hw:0,2 -f S16_LE -r 48000 -c 2 -d 3 test.wav
+ *
+ * With these links the whole card, speaker included, waits for the codec. So they stay out until the
+ * microphones work and the audio service writes those switches.
+ *
+ * What was measured on the phone, 2026-11-05:
+ * - SLIMbus comes up and the codec answers: chip id 01050001, a 2.0 part. The card binds, with jack detection.
+ * - The DSP starts SLIMBUS_0_TX without error, and hands back capture blocks on time (status 0, 3840 bytes).
+ *   The channel map must be right first: without it the port start fails with error 1.
+ * - The master clock arrives: the codec's RCO calibration result (0x17d) reads 80 with MCLK off, 8c-8d with it on.
+ * - The TX ports run: cutting the decimators' clock (0x30a) makes them report underflow at once, 02 in 0x70+port,
+ *   and it stops when the clock returns. So the decimators feed the ports at the right rate.
+ * - RX data does reach the codec: its RX ports report overflow (01 in 0x60+port), which clears when idle and comes
+ *   straight back while playing. That overflow itself is unexplained.
+ * - Every sample recorded is exactly 0, on every microphone pair and format. Also with the high-pass filter off, with
+ *   gain, with DEC1 from ADC6, with TX1 from the RX mix, with all of Android's register defaults written (including
+ *   CHIP_CTL 0x02 and the PIN_CTL values), with CDC_CONN set, and with the channel activated before or after the DSP's
+ *   port. An idle microphone line through a decimator with its filter off should not read exactly 0.
+ *
+ * Not tried: whether the samples are non-zero on the bus, which needs a logic analyser on SLIMBUS_DATA (TLMM 71);
+ * microphone supply voltage, likewise a meter. The two ends are hard to tell apart without one of those.
+ */
+/*
+ * The sound card with the codec. It now waits for the codec: ztos-talkman-audio brings SLIMbus up after the
+ * audio DSP, and the card, speaker included, appears then.
+ */
+&q6asmdai {
+	dai@1 {
+		reg = <MSM_FRONTEND_DAI_MULTIMEDIA2>;
+		direction = <Q6ASM_DAI_TX>;
+	};
+};
+
+&{/sound} {
+	mm2-dai-link {
+		link-name = "MultiMedia2";
+
+		cpu {
+			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
+		};
+	};
+
+	codec-playback-dai-link {
+		link-name = "Codec Playback";
+
+		cpu {
+			sound-dai = <&q6afedai SLIMBUS_0_RX>;
+		};
+
+		platform {
+			sound-dai = <&q6routing>;
+		};
+
+		codec {
+			sound-dai = <&wcd9330 0>;
+		};
+	};
+
+	codec-capture-dai-link {
+		link-name = "Codec Capture";
+
+		cpu {
+			sound-dai = <&q6afedai SLIMBUS_0_TX>;
+		};
+
+		platform {
+			sound-dai = <&q6routing>;
+		};
+
+		codec {
+			sound-dai = <&wcd9330 1>;
+		};
+	};
+};

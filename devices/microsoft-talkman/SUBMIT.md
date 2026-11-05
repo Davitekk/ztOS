@@ -60,7 +60,7 @@ The form starts with a list of features: set each one as below, and use
 | Modem | SMS | broken | As SIM and signal |
 | Modem | Calls | broken | As SIM and signal |
 | Audio | Speaker | working | TAS2553 amp behind the audio DSP, through PipeWire |
-| Audio | Microphone | broken | Not started: the WCD9330 codec has no driver in this kernel |
+| Audio | Microphone | broken | The WCD9330 codec answers and capture runs by hand, but every sample is 0. Off in a normal boot |
 | Audio | Headphones | broken | As the microphone |
 | Sensors | Ambient light | working | Auto brightness follows the room, with its switch in Settings. The lux scale is an estimate |
 | Sensors | Accelerometer, gyroscope | partial | ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet |

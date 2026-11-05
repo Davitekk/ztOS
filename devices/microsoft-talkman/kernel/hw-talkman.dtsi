@@ -282,3 +282,66 @@
 &{/soc@0/i2c@f9928000/pn547@28} {
 	compatible = "nxp,nxp-nci-i2c";
 };
+
+/*
+ * The codec (WCD9330): microphones, earpiece, headphones, over SLIMbus. Values from the Android tree's
+ * msm8994.dtsi. Its driver waits for ngd_hw and ngd_up in sysfs before it touches the bus, and nothing
+ * here writes them yet, so a normal boot leaves the codec in reset. See wip-codec-card.dtsi.
+ */
+&tlmm {
+	slimbus_default: slimbus-default-state {
+		pins = "gpio70", "gpio71";
+		function = "slimbus";
+		drive-strength = <8>;
+		bias-disable;
+	};
+};
+
+&{/soc@0} {
+	slim_msm: slim-ngd@fe12f000 {
+		compatible = "qcom,slim-ngd-v1.5.0";
+		reg = <0xfe12f000 0x2c000>;
+		interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&slimbus_default>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		slim@1 {
+			reg = <1>;
+			#address-cells = <2>;
+			#size-cells = <0>;
+
+			tomtom_ifd: ifd@0,0 {
+				compatible = "slim217,130";
+				reg = <0 0>;
+			};
+
+			wcd9330: codec@1,0 {
+				compatible = "slim217,130";
+				reg = <1 0>;
+				slim-ifc-dev = <&tomtom_ifd>;
+
+				reset-gpios = <&tlmm 68 GPIO_ACTIVE_LOW>;
+				interrupt-parent = <&tlmm>;
+				interrupts = <72 IRQ_TYPE_LEVEL_HIGH>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&wcd_intr_default>;
+
+				clocks = <&divclk1>;
+				clock-names = "mclk";
+
+				vdd-buck-supply = <&vreg_s5a_2p15>;
+				vdd-tx-h-supply = <&vreg_s4a_1p8>;
+				vdd-rx-h-supply = <&vreg_s4a_1p8>;
+				vdd-px-supply = <&vreg_s4a_1p8>;
+				vdd-a-1p2v-supply = <&vreg_l11a_1p2>;
+				vdd-cx1-supply = <&vreg_l11a_1p2>;
+				vdd-cx2-supply = <&vreg_l11a_1p2>;
+
+				qcom,mbhc-insert-detect-inverted;
+				#sound-dai-cells = <1>;
+			};
+		};
+	};
+};
