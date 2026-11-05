@@ -69,7 +69,8 @@ The form starts with a list of features: set each one as below, and use
 | Sensors | Pressure | untested | ZPA2326 reads a value |
 | Camera | Rear camera | working | The preview does not look good. Real pictures through camss and ccs; preview about 6 fps and soft, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced |
 | Camera | Front camera | working | The preview does not look good. Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
-| Camera | Iris camera, flash | broken | Not started |
+| Camera | Iris camera | broken | Found on its bus, with no picture yet |
+| Camera | Flash | broken | The driver chip answers, but it is not identified, so nothing is written to it |
 | Location | GPS | broken | Depends on the modem |
 | Software | ztMETRO | working | About 60 fps while scrolling |
 | Software | Android apps (Waydroid) | untested | Its first-start download needs Wi-Fi, which now works; not tried yet |

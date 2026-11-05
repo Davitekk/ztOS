@@ -272,8 +272,8 @@
 };
 
 /*
- * NFC. The chip answers NCI, not the PN544 protocol the tree's node asks for. Its supply is L9, which
- * the modem otherwise switches with its radio, and it only wakes with L9 already up.
+ * NFC. The chip answers NCI, not the PN544 protocol the tree's node asks for. It was only seen to answer
+ * with L9 up when its enable line rises, and the modem otherwise switches L9 with its radio.
  */
 &{/remoteproc/smd-edge/rpm-requests/regulators-0/l9} {
 	regulator-always-on;

@@ -220,9 +220,15 @@
     },
     {
       "category": "Camera",
-      "feature": "Iris camera, flash",
+      "feature": "Iris camera",
       "status": "broken",
-      "notes": "Not started"
+      "notes": "Found on its bus, with no picture yet"
+    },
+    {
+      "category": "Camera",
+      "feature": "Flash",
+      "status": "broken",
+      "notes": "The driver chip answers, but it is not identified, so nothing is written to it"
     },
     {
       "category": "Location",
