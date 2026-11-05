@@ -125,8 +125,8 @@
     {
       "category": "Network",
       "feature": "Bluetooth",
-      "status": "partial",
-      "notes": "QCA6174. Powers on and finds nearby devices; pairing and audio not tried yet"
+      "status": "working",
+      "notes": "QCA6174. Pairing and audio tried"
     },
     {
       "category": "Network",
@@ -209,14 +209,14 @@
     {
       "category": "Camera",
       "feature": "Rear camera",
-      "status": "partial",
-      "notes": "Real pictures through camss and ccs; preview about 6 fps and soft, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced"
+      "status": "working",
+      "notes": "The preview does not look good. Real pictures through camss and ccs; preview about 6 fps and soft, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced"
     },
     {
       "category": "Camera",
       "feature": "Front camera",
-      "status": "partial",
-      "notes": "Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP"
+      "status": "working",
+      "notes": "The preview does not look good. Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP"
     },
     {
       "category": "Camera",

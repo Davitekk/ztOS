@@ -53,7 +53,7 @@ The form starts with a list of features: set each one as below, and use
 | Power | Battery and charging | working | PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | broken | Goes to sleep and wakes on a timer, then restarts while resuming. No CPU idle states yet either |
 | Network | Wi-Fi | working | QCA6174 on PCIe with ath10k. Joins a network from Settings and reaches the internet. 2.4 and 5 GHz |
-| Network | Bluetooth | partial | QCA6174. Powers on and finds nearby devices; pairing and audio not tried yet |
+| Network | Bluetooth | working | QCA6174. Pairing and audio tried |
 | Network | Mobile data | broken | Not started: no modem driver for this chip in this kernel |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM and signal | broken | Not started |
@@ -67,8 +67,8 @@ The form starts with a list of features: set each one as below, and use
 | Sensors | Proximity | untested | The chip is found and reads about 45; not tried with anything near it |
 | Sensors | Magnetometer | partial | AK8975 reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | untested | ZPA2326 reads a value |
-| Camera | Rear camera | partial | Real pictures through camss and ccs; preview about 6 fps and soft, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced |
-| Camera | Front camera | partial | Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
+| Camera | Rear camera | working | The preview does not look good. Real pictures through camss and ccs; preview about 6 fps and soft, fixed focus (no lens driver), photos about 5 MP as the sensor's cells are not demosaiced |
+| Camera | Front camera | working | The preview does not look good. Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
 | Camera | Iris camera, flash | broken | Not started |
 | Location | GPS | broken | Depends on the modem |
 | Software | ztMETRO | working | About 60 fps while scrolling |

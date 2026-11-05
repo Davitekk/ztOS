@@ -30,12 +30,12 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Power | Sleep (suspend) | Not working | Tried with a timed `s2idle`: with USB and PCIe kept up, the phone goes to sleep and the RTC wakes it, then it restarts while resuming, with no crash record. This kernel also has no CPU idle states, so sleep would save little yet |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
-| Network | Bluetooth | Partial | QCA6174 on `blsp2_uart2`. Powers on and finds nearby devices. Pairing and audio not tried. Its address is made from the installation's machine id, not the phone's own |
+| Network | Bluetooth | Works | QCA6174 on `blsp2_uart2`. Pairing and audio tried. Its address is made from the installation's machine id, not the phone's own |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
 | Audio | Speaker | Works | TAS2553 amp behind the audio DSP, through PipeWire and its volume. Checked by recording it with a microphone beside the phone: tones at 440, 1500 and 3000 Hz, clean and loud |
 | Audio | Earpiece, microphones, headphones | Not working | Not started: on the WCD9330 codec over SLIMbus, which has no driver in this kernel |
-| Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
-| Camera | Front, 5 MP | Partial | Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
+| Camera | Rear, 21 MP | Works | The preview does not look good. Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
+| Camera | Front, 5 MP | Works | The preview does not look good. Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
 | Camera | Iris camera | Not working | Found, no picture yet. I2C 0x36 on CCI0, ID 0x0861, set up for 1928x1088 RAW10, with SMIA's settings registers but none of its capability tables, so the `ccs` driver cannot run it. It shares CSI2 with the front camera in combo mode (clock on PHY lane 3, data on lane 4), which camss does not do: tried by hand, the lane shows activity, and no frame arrived |
 | Camera | Flash | Not working | Not started |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
@@ -52,7 +52,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Feature | Status | Notes |
 |---|---|---|
 | ztMETRO, the shell | Works | 59.8 fps while scrolling Start, measured on a fresh install; 2 late frames in 30 s |
-| ztCamera | Partial | Live viewfinder, front and rear switch, photos |
+| ztCamera | Works | The preview does not look good. Live viewfinder, front and rear switch, photos |
 | Sound in ztMETRO | Works | Through PipeWire and WirePlumber |
 | Android apps (Waydroid) | Untested | Its first-start download needs Wi-Fi, which now works; not tried yet |
 | ztOSIAL (`ztos-ial test`) | Partial | All but one check passed on a fresh install; the one that fails looks for cpufreq clusters |
