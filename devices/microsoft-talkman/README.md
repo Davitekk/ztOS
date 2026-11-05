@@ -30,7 +30,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Power | Sleep (suspend) | Untested | |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
-| Network | Bluetooth | Not working | QCA6174 on `blsp2_uart2`. Tried by hand: its 3.3 V rail on (PM8994 GPIO 9, which the kernel's device tree leaves off), BT_EN high, 32 kHz clock running; the driver sends and nothing comes back (`command 0xfc00 tx timeout`). The firmware is in Android4Lumia950/firmware-microsoft-talkman |
+| Network | Bluetooth | Partial | QCA6174 on `blsp2_uart2`. Powers on and finds nearby devices. Pairing and audio not tried. Its address is made from the installation's machine id, not the phone's own |
 | Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
 | Audio | Speaker | Works | TAS2553 amp behind the audio DSP, through PipeWire and its volume. Checked by recording it with a microphone beside the phone: tones at 440, 1500 and 3000 Hz, clean and loud |
 | Audio | Earpiece, microphones, headphones | Not working | Not started: on the WCD9330 codec over SLIMbus, which has no driver in this kernel |
@@ -39,7 +39,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
-| Sensors | Ambient light, proximity | Untested | The chip is found and ztOSIAL reads it. Light read 0 in a lit room; proximity reads about 45, not tried with anything near it |
+| Sensors | Ambient light, proximity | Untested | APDS-9930: ztOSIAL reads it. Light read 0 in a lit room; proximity reads about 45, not tried with anything near it. Its infrared LED pulses only while proximity is being read |
 | Sensors | Accelerometer, gyroscope | Partial | Not the MPU-6500 the device tree names but an ICM-20x48 family chip, with a small driver here. Lying still it reads 9.6 m/s2 down its Z axis, and the gyroscope and temperature are sensible. No mounting matrix yet: only Z has been checked, with the phone flat, so X and Y may be swapped or reversed |
 | Other | FM radio, NFC | Untested | Devices appear |
 | Location | GPS | Not working | Depends on the modem |
@@ -99,6 +99,8 @@ with real use. **Not working**: tried and failing, or not started; the notes say
   firmware is on the root, and a fault then comes with SSH up. `lspci` should list the QCA6174.
 - The controller needs its core reset (`PCIE_0_CORE_RESET`, which the kernel's table left out).
   Without it the link reaches L0, yet every read of the card returns all ones and no error.
+- Bluetooth's UART must not use DMA, or the chip never answers. `ztos-talkman-bluetooth` starts the
+  chip again after Wi-Fi has its 3.3 V on, and gives it its address.
 - `/dev/input/event0` is now the motor: the power key moved to `event1`.
 - Wi-Fi's MAC address comes from the board file, so it would be the same on every phone.
   NetworkManager is set to give each phone a stable one of its own.

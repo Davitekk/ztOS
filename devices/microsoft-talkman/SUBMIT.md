@@ -53,7 +53,7 @@ The form starts with a list of features: set each one as below, and use
 | Power | Battery and charging | working | PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start |
 | Power | Sleep (suspend) | untested |  |
 | Network | Wi-Fi | working | QCA6174 on PCIe with ath10k. Joins a network from Settings and reaches the internet. 2.4 and 5 GHz |
-| Network | Bluetooth | broken | QCA6174 is found but does not answer on its UART, even with its power rail and enable line on |
+| Network | Bluetooth | partial | QCA6174. Powers on and finds nearby devices; pairing and audio not tried yet |
 | Network | Mobile data | broken | Not started: no modem driver for this chip in this kernel |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Modem | SIM and signal | broken | Not started |

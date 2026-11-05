@@ -125,8 +125,8 @@
     {
       "category": "Network",
       "feature": "Bluetooth",
-      "status": "broken",
-      "notes": "QCA6174 is found but does not answer on its UART, even with its power rail and enable line on"
+      "status": "partial",
+      "notes": "QCA6174. Powers on and finds nearby devices; pairing and audio not tried yet"
     },
     {
       "category": "Network",

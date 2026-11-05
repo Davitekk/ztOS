@@ -1,0 +1,13 @@
+[Unit]
+Description=Start the Bluetooth chip, once Wi-Fi has its power on and the firmware is there
+After=ztos-talkman-wifi.service local-fs.target
+Wants=ztos-talkman-wifi.service
+Before=bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ztos-talkman-bluetooth
+
+[Install]
+WantedBy=multi-user.target

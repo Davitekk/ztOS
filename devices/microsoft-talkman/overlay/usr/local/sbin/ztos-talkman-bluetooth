@@ -1,0 +1,38 @@
+#!/bin/sh
+# Bluetooth starts this phone in two steps the kernel cannot do alone:
+#
+# The chip has its 3.3 V only once ztos-talkman-wifi.service has run and its firmware is on the
+# root, so it is started again here, after both. The first try, as the kernel starts, finds neither.
+#
+# Its address: the kernel waits to be told one and keeps the chip "unconfigured" until then, and
+# this port does not read the phone's own. So one made from this installation's machine id, the
+# same on every start: a locally administered unicast address, as no maker has given this one out.
+set -u
+D=/sys/bus/serial/drivers/hci_uart_qca
+DEV=serial0-0
+
+# the rail comes up when PCIe does
+i=0
+while [ "$i" -lt 60 ] && ! [ -e /sys/bus/pci/devices/0000:01:00.0 ]; do
+	sleep 0.5
+	i=$((i + 1))
+done
+
+if [ -e "$D/$DEV" ]; then
+	echo "$DEV" > "$D/unbind"
+	sleep 0.3
+fi
+echo "$DEV" > "$D/bind"
+
+h=$(sha256sum /etc/machine-id | cut -c1-10)
+addr="02:$(echo "$h" | sed -E 's/(..)(..)(..)(..)(..)/\1:\2:\3:\4:\5/')"
+
+# it takes this until the firmware is in
+i=0
+while [ "$i" -lt 40 ]; do
+	timeout 5 btmgmt --index 0 public-addr "$addr" 2>&1 | grep -q complete && exit 0
+	sleep 0.5
+	i=$((i + 1))
+done
+echo "ztos-talkman-bluetooth: the chip did not take an address" >&2
+exit 1

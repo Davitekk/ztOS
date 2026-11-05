@@ -165,3 +165,12 @@
 		};
 	};
 };
+
+/*
+ * Bluetooth's UART by its FIFO. By DMA the bytes count as sent and the chip never answers:
+ * "command 0xfc00 tx timeout".
+ */
+&blsp2_uart2 {
+	/delete-property/ dmas;
+	/delete-property/ dma-names;
+};
