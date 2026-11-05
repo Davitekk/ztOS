@@ -27,7 +27,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Input | Vibration | Works | PMI8994 haptics, a small driver here. Each start is a 40 ms kick at 3.6 V, as the motor takes 60 ms to spin up and the system's taps last 12 ms; it then runs at up to 2.9 V. Measured with the motion chip, a tap moved 0.2 m/s2 before this and moves 8.8 now. Stops by itself after 15 s at most |
 | Power | CPU, frequency scaling | Not working | No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores |
 | Power | Battery and charging | Works | PMI8994 gauge and charger: USB charging tried, limits set to 4.35 V, 1.5 A. The gauge adds 20 s to every start |
-| Power | Sleep (suspend) | Untested | |
+| Power | Sleep (suspend) | Not working | Tried with a timed `s2idle`: with USB and PCIe kept up, the phone goes to sleep and the RTC wakes it, then it restarts while resuming, with no crash record. This kernel also has no CPU idle states, so sleep would save little yet |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
 | Network | Bluetooth | Partial | QCA6174 on `blsp2_uart2`. Powers on and finds nearby devices. Pairing and audio not tried. Its address is made from the installation's machine id, not the phone's own |
@@ -89,6 +89,8 @@ with real use. **Not working**: tried and failing, or not started; the notes say
   a stream is running.
 - The full-size sensor readout is more than the camera block's bus takes, so previews are scaled
   on the sensor. `ztcamera-route` holds all of this.
+- `/sys/fs/pstore` keeps the kernel log of the last start, so a restart can be read afterwards (a
+  power controller retry overwrites it).
 - Kernels hang: test them from RAM with the boot partition empty (see [INSTALL.md](INSTALL.md)).
 - The audio DSP starts after boot, from `ztos-talkman-audio.service`. Its memory must be at
   0x0ce00000: at the kernel tree's address the phone restarts with no record. PipeWire must send it

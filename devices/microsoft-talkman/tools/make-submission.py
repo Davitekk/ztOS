@@ -47,7 +47,7 @@ FEATURES = [
     ("Input", "Vibration", W, "PMI8994 haptics, with a short kick at each start so that short taps can be felt"),
     ("Power", "CPU, frequency scaling", B, "No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores"),
     ("Power", "Battery and charging", W, "PMI8994 gauge and charger, USB charging tried. The gauge adds 20 s to every start"),
-    ("Power", "Sleep (suspend)", U, ""),
+    ("Power", "Sleep (suspend)", B, "Goes to sleep and wakes on a timer, then restarts while resuming. No CPU idle states yet either"),
     ("Network", "Wi-Fi", W, "QCA6174 on PCIe with ath10k. Joins a network from Settings and reaches the internet. 2.4 and 5 GHz"),
     ("Network", "Bluetooth", P, "QCA6174. Powers on and finds nearby devices; pairing and audio not tried yet"),
     ("Network", "Mobile data", B, "Not started: no modem driver for this chip in this kernel"),

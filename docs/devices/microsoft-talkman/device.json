@@ -113,8 +113,8 @@
     {
       "category": "Power",
       "feature": "Sleep (suspend)",
-      "status": "untested",
-      "notes": ""
+      "status": "broken",
+      "notes": "Goes to sleep and wakes on a timer, then restarts while resuming. No CPU idle states yet either"
     },
     {
       "category": "Network",
