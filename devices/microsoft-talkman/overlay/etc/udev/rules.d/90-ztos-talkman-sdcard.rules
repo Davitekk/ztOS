@@ -1,0 +1,2 @@
+# The microSD slot's controller: what is on it with a file system goes in the user's home
+SUBSYSTEM=="block", ACTION=="add|change", KERNELS=="f98a4900.mmc", ENV{ID_FS_USAGE}=="filesystem", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ztos-talkman-sdcard@%k.service"

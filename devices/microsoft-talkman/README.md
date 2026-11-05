@@ -45,7 +45,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Other | FM radio, NFC | Untested | Devices appear |
 | Location | GPS | Not working | Depends on the modem |
 | Storage | Internal, 32 GB | Works | ztOS takes MainOS and Data; the system fills it on first start |
-| Storage | microSD | Untested | |
+| Storage | microSD | Works | Tried with an 8 GB FAT32 card: a 64 MB file read back the same, reading at 22 MB/s and writing at 5 MB/s. It appears as `SD card` in the home folder, so in the Files app. Taking a card out while running is not tried |
 
 ### Software
 

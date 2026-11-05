@@ -1,0 +1,29 @@
+#!/bin/sh
+# ztos-talkman-sdcard <mount|unmount> <device name>: the microSD card as "SD card" in the user's
+# home, which is where the Files app shows it. Started by udev, by way of its service.
+set -u
+action=$1
+dev=/dev/$2
+home=$(getent passwd 1000 | cut -d: -f6)
+[ -n "$home" ] || exit 0
+target="$home/SD card"
+
+case $action in
+mount)
+	mkdir -p "$target"
+	chown 1000:1000 "$target"
+	case $(blkid -o value -s TYPE "$dev") in
+	vfat | exfat) options=noatime,uid=1000,gid=1000,fmask=0022,dmask=0022 ;;
+	*) options=noatime ;;
+	esac
+	if ! mount -o "$options" "$dev" "$target"; then
+		rmdir "$target" 2>/dev/null
+		exit 1
+	fi
+	;;
+unmount)
+	umount "$target" 2>/dev/null || umount -l "$target"
+	rmdir "$target" 2>/dev/null
+	;;
+esac
+exit 0

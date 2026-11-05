@@ -1,0 +1,10 @@
+[Unit]
+Description=microSD card %i
+BindsTo=dev-%i.device
+After=dev-%i.device local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ztos-talkman-sdcard mount %i
+ExecStop=/usr/local/sbin/ztos-talkman-sdcard unmount %i
