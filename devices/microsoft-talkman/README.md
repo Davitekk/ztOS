@@ -27,6 +27,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Input | Vibration | Works | PMI8994 haptics, a small driver here. Each start is a 40 ms kick at 3.6 V, as the motor takes 60 ms to spin up and the system's taps last 12 ms; it then runs at up to 2.9 V. Measured with the motion chip, a tap moved 0.2 m/s2 before this and moves 8.8 now. Stops by itself after 15 s at most |
 | Power | CPU, frequency scaling | Not working | No driver. The cores stay at the bootloader's clocks, measured at about 785 MHz (little) and 191 MHz (big), so programs are kept on the little cores |
 | Power | Battery and charging | Works | PMI8994 gauge and charger: USB charging tried, limits set to 4.35 V, 1.5 A. The gauge adds 20 s to every start |
+| Power | Power off | Untested | The kernel now tells the power chip to shut down instead of resetting, which is why power off used to restart the phone. Rebooting is tried and still works. Power off itself is not tried yet |
 | Power | Sleep (suspend) | Not working | Tried with a timed `s2idle`: with USB and PCIe kept up, the phone goes to sleep and the RTC wakes it, then it restarts while resuming, with no crash record. This kernel also has no CPU idle states, so sleep would save little yet |
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
@@ -40,9 +41,11 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Camera | Flash | Not working | Not started |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
-| Sensors | Ambient light, proximity | Untested | APDS-9930: ztOSIAL reads it. Light reads 0 even at its highest gain and a 200 ms integration, in a dim room: to be tried in daylight; proximity reads about 45, not tried with anything near it. Its infrared LED pulses only while proximity is being read |
+| Sensors | Ambient light, auto brightness | Works | APDS-9930. Auto brightness follows the room, with its switch in Settings. Tried in a daylit room: the screen goes to its level by itself, and readings do not rise with the screen. A dark room and sunlight were only tried with simulated readings. The lux scale is an estimate (`LUX_PER_COUNT` in `ztos-talkman-light`), not measured. The sensor's first probe sometimes times out at boot, so the daemon tries it again |
+| Sensors | Proximity | Untested | APDS-9930: reads about 45, not tried with anything near it. Its infrared LED pulses only while proximity is being read |
 | Sensors | Accelerometer, gyroscope | Partial | Not the MPU-6500 the device tree names but an ICM-20x48 family chip, with a small driver here. Lying still it reads 9.6 m/s2 down its Z axis, and the gyroscope and temperature are sensible. No mounting matrix yet: only Z has been checked, with the phone flat, so X and Y may be swapped or reversed |
-| Other | FM radio, NFC | Untested | Devices appear. NFC is bound to the kernel's PN544 driver, but the chip answers NCI (a plain reset gets a valid NCI 1.0 reply), so it would need the NXP NCI driver instead |
+| Other | NFC | Partial | The chip turns on and polls, on the kernel's NXP NCI driver. Reading a tag: not tried yet. `tools/nfc-poll.py` tests it. There is no NFC app |
+| Other | FM radio | Untested | The device appears |
 | Location | GPS | Not working | Depends on the modem |
 | Storage | Internal, 32 GB | Works | ztOS takes MainOS and Data; the system fills it on first start |
 | Storage | microSD | Works | Tried with an 8 GB FAT32 card: a 64 MB file read back the same, reading at 22 MB/s and writing at 5 MB/s. It appears as `SD card` in the home folder, so in the Files app. Taking a card out while running is not tried |

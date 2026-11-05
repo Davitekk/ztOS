@@ -1,0 +1,11 @@
+[Unit]
+Description=Auto brightness from the light sensor
+After=local-fs.target
+
+[Service]
+ExecStart=/usr/local/sbin/ztos-talkman-light
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

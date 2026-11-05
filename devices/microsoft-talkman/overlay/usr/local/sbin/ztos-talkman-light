@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Auto brightness on the Lumia 950, from its APDS-9930 light sensor.
+
+The ztOS sensor daemon speaks to the S9's sensor hub. This one takes its place here, with the same
+pipe, status file and curve, so Settings and the shell need nothing different.
+
+Lux comes from the raw visible-plus-infrared channel, not the driver's figure. The driver's formula
+assumes no cover glass and, behind this phone's, reads about 3 in a daylit room. LUX_PER_COUNT is an
+estimate from such a room, not measured against a lux meter: it is the one number to change.
+"""
+import glob
+import math
+import os
+import select
+import stat
+import time
+
+NAME = 'apds9930'
+DRIVER = '/sys/bus/i2c/drivers/tsl2772'
+I2C_DEVICE = '4-0039'
+CTL = '/run/ztoscsf-sensord.ctl'
+STATUS_DIR = '/run/ztoscsf-sensors'
+SAVED = '/var/lib/ztos-talkman-light/auto'
+LUX_PER_COUNT = 2.0     # at gain 1 and 0.2 s
+TIME = '0.2'
+GAINS = (1, 8, 120)     # the sensor also has 16; these are far enough apart
+HIGH, LOW = 40000, 400  # counts to change gain at
+
+# as the S9's daemon: nits for the room, then percent L* of the panel's peak
+CURVE = ((1, 10), (7, 25), (55, 110), (700, 170), (1400, 250), (2500, 400))
+PANEL_PEAK_NITS = 400.0
+FLOOR_L = 18.03
+SMOOTH = 0.35
+STEP = 30               # tenths of L* the goal must move by
+UP_S, DOWN_S = 4.0, 8.0
+
+
+def read(path):
+    with open(path) as f:
+        return f.read().strip()
+
+
+def write(path, value):
+    with open(path, 'w') as f:
+        f.write(str(value))
+
+
+def find_sensor():
+    for d in glob.glob('/sys/bus/iio/devices/iio:device*'):
+        try:
+            if read(d + '/name') == NAME:
+                return d
+        except OSError:
+            pass
+    return None
+
+
+def permille(lux):
+    nits = CURVE[0][1]
+    if lux >= CURVE[-1][0]:
+        nits = CURVE[-1][1]
+    elif lux > CURVE[0][0]:
+        for (l0, n0), (l1, n1) in zip(CURVE, CURVE[1:]):
+            if lux <= l1:
+                t = (math.log10(lux) - math.log10(l0)) / (math.log10(l1) - math.log10(l0))
+                nits = n0 + (n1 - n0) * t
+                break
+    l = 116.0 * (nits / PANEL_PEAK_NITS) ** (1 / 3) - 16.0
+    return int(round(min(max(l, FLOOR_L), 100.0) * 10))
+
+
+def tell_shell(line):
+    sent = False
+    for path in glob.glob('/run/user/*/ztmetro.ctl'):
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+            try:
+                os.write(fd, line.encode())
+                sent = True
+            finally:
+                os.close(fd)
+        except OSError:
+            pass    # the shell is busy or not up; the next reading tries again
+    return sent
+
+
+class Light:
+    def __init__(self, sensor):
+        self.sensor = sensor
+        self.gain = 0
+        self.auto = True
+        self.screen = True
+        self.smooth = -1.0
+        self.goal = -1
+        self.way = 0
+        self.since = 0.0
+        try:
+            self.auto = read(SAVED) != 'off'
+        except OSError:
+            pass
+        write(sensor + '/in_intensity0_integration_time', TIME)
+        self.set_gain(1)
+
+    def set_gain(self, index):
+        self.gain = index
+        write(self.sensor + '/in_intensity0_calibscale', GAINS[index])
+
+    def status(self):
+        os.makedirs(STATUS_DIR, exist_ok=True)
+        tmp = STATUS_DIR + '/status.tmp'
+        write(tmp, 'auto=%s\nscreen=%s\nopentone=off\n' % ('on' if self.auto else 'off', 'on' if self.screen else 'off'))
+        os.replace(tmp, STATUS_DIR + '/status')
+
+    def lux(self):
+        """Lux, or None while the gain changes: the next reading is the first at the new gain."""
+        counts = int(read(self.sensor + '/in_intensity0_raw'))
+        if counts > HIGH and self.gain > 0:
+            self.set_gain(self.gain - 1)
+            return None
+        if counts < LOW and self.gain < len(GAINS) - 1:
+            self.set_gain(self.gain + 1)
+            return None
+        return counts * LUX_PER_COUNT / GAINS[self.gain]
+
+    def decide(self):
+        if not self.auto or not self.screen or self.smooth < 0:
+            return
+        target = permille(10 ** self.smooth - 1)
+        if self.goal < 0:
+            self.way = 0
+            self.show(target)
+            return
+        way = 0 if abs(target - self.goal) < STEP else (1 if target > self.goal else -1)
+        if way != self.way:
+            self.way = way
+            self.since = time.monotonic()
+        if way and time.monotonic() - self.since >= (UP_S if way > 0 else DOWN_S):
+            self.way = 0
+            self.show(target)
+
+    def show(self, target):
+        self.goal = target if tell_shell('brightness-auto %d\n' % target) else -1
+
+    def reading(self):
+        lux = self.lux()
+        if lux is None:
+            return
+        l = math.log10(lux + 1)
+        self.smooth = l if self.smooth < 0 else self.smooth + (l - self.smooth) * SMOOTH
+        self.decide()
+
+    def command(self, line):
+        word, _, value = line.strip().partition(' ')
+        if word == 'screen':
+            self.screen = value != 'off'
+            self.smooth = -1.0
+            self.goal = -1
+        elif word == 'auto':
+            self.auto = value == 'on'
+            self.goal = -1
+            os.makedirs(os.path.dirname(SAVED), exist_ok=True)
+            write(SAVED, 'on' if self.auto else 'off')
+        else:
+            return
+        self.status()
+
+
+def make_pipe():
+    try:
+        if not stat.S_ISFIFO(os.stat(CTL).st_mode):
+            os.unlink(CTL)
+            os.mkfifo(CTL)
+    except FileNotFoundError:
+        os.mkfifo(CTL)
+    os.chmod(CTL, 0o666)    # anyone may write: Settings runs as the user
+    return os.open(CTL, os.O_RDWR | os.O_NONBLOCK)  # read and write: it never reads as closed
+
+
+def main():
+    # The sensor's first probe sometimes times out at boot (-110) and then works when tried again.
+    sensor = None
+    for second in range(120):
+        sensor = find_sensor()
+        if sensor:
+            break
+        if second % 10 == 9:
+            try:
+                write(DRIVER + '/bind', I2C_DEVICE)
+            except OSError:
+                pass
+        time.sleep(1)
+    if not sensor:
+        raise SystemExit('ztos-talkman-light: no ' + NAME)
+    pipe = make_pipe()
+    light = Light(sensor)
+    light.status()
+    pending = b''
+    last = 0.0
+    while True:
+        ready, _, _ = select.select([pipe], [], [], 1.0)
+        if ready:
+            pending += os.read(pipe, 4096)
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                light.command(line.decode('ascii', 'replace'))
+        if light.auto and light.screen and time.monotonic() - last >= 1.0:
+            last = time.monotonic()
+            try:
+                light.reading()
+            except OSError:
+                pass    # a read that failed; the next second tries again
+
+
+if __name__ == '__main__':
+    main()

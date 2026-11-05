@@ -7,6 +7,9 @@ and the next kernel's requests time out (clk-smd-rpm -110, "failed to sync cx"):
 no regulators, so no touchscreen, display or SD card. A press of the power button
 has always been a full reset, which is why only that boot worked.
 
+Powering off also drops PS_HOLD, so with that setting it restarted the phone. So just
+before a power off the type becomes PON_POWER_OFF_SHUTDOWN 0x04, as in the same function.
+
 The registers, values and order are qpnp_pon_reset_config() in the phone's Android
 kernel (Android4Lumia950/android_kernel_mmo_msm8994, drivers/platform/msm/
 qpnp-power-on.c): PS_HOLD_RST_CTL 0x5a with PON_POWER_OFF_HARD_RESET 0x07, with
@@ -25,9 +28,11 @@ ADD_DEFINE = """#define PON_PS_HOLD_RST_CTL\t\t0x5a
 #define PON_PS_HOLD_RST_EN\t\tBIT(7)
 #define PON_PS_HOLD_TYPE_MASK\t\tGENMASK(3, 0)
 #define PON_PS_HOLD_HARD_RESET\t\t0x07
+#define PON_PS_HOLD_SHUTDOWN\t\t0x04
+#include <linux/reboot.h>
 """
 PROBE = "static int qcom_pon_probe(struct platform_device *pdev)\n"
-ADD_FUNC = """static int qcom_pon_set_hard_reset(struct qcom_pon *pon)
+ADD_FUNC = """static int qcom_pon_set_ps_hold(struct qcom_pon *pon, unsigned int type)
 {
 	u32 ctl = pon->baseaddr + PON_PS_HOLD_RST_CTL;
 	u32 ctl2 = pon->baseaddr + PON_PS_HOLD_RST_CTL2;
@@ -39,8 +44,7 @@ ADD_FUNC = """static int qcom_pon_set_hard_reset(struct qcom_pon *pon)
 
 	usleep_range(100, 200);
 
-	ret = regmap_update_bits(pon->regmap, ctl, PON_PS_HOLD_TYPE_MASK,
-				 PON_PS_HOLD_HARD_RESET);
+	ret = regmap_update_bits(pon->regmap, ctl, PON_PS_HOLD_TYPE_MASK, type);
 	if (ret < 0)
 		return ret;
 
@@ -48,12 +52,24 @@ ADD_FUNC = """static int qcom_pon_set_hard_reset(struct qcom_pon *pon)
 				  PON_PS_HOLD_RST_EN);
 }
 
+static int qcom_pon_power_off_prepare(struct sys_off_data *data)
+{
+	qcom_pon_set_ps_hold(data->cb_data, PON_PS_HOLD_SHUTDOWN);
+	return NOTIFY_DONE;
+}
+
 """
 DRVDATA = "\tplatform_set_drvdata(pdev, pon);\n"
 ADD_CALL = """\tif (of_machine_is_compatible("microsoft,talkman")) {
-		error = qcom_pon_set_hard_reset(pon);
+		error = qcom_pon_set_ps_hold(pon, PON_PS_HOLD_HARD_RESET);
 		if (error < 0)
 			dev_err(&pdev->dev, "can't set hard reset: %d\\n", error);
+		error = devm_register_sys_off_handler(&pdev->dev,
+						      SYS_OFF_MODE_POWER_OFF_PREPARE,
+						      SYS_OFF_PRIO_DEFAULT,
+						      qcom_pon_power_off_prepare, pon);
+		if (error < 0)
+			dev_err(&pdev->dev, "can't prepare power off: %d\\n", error);
 	}
 
 """
@@ -69,7 +85,7 @@ def main() -> None:
     text = text.replace(PROBE, ADD_FUNC + PROBE)
     text = text.replace(DRVDATA, ADD_CALL + DRVDATA)
     path.write_text(text)
-    print("patch-pon-reset: a reboot resets the PMIC")
+    print("patch-pon-reset: a reboot resets the PMIC, a power off shuts it down")
 
 
 if __name__ == "__main__":

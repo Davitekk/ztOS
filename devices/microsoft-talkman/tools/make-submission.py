@@ -58,7 +58,7 @@ FEATURES = [
     ("Audio", "Speaker", W, "TAS2553 amp behind the audio DSP, through PipeWire"),
     ("Audio", "Microphone", B, "Not started: the WCD9330 codec has no driver in this kernel"),
     ("Audio", "Headphones", B, "As the microphone"),
-    ("Sensors", "Ambient light", U, "The chip is found and ztOSIAL reads it, but it read 0 in a lit room"),
+    ("Sensors", "Ambient light", W, "Auto brightness follows the room, with its switch in Settings. The lux scale is an estimate"),
     ("Sensors", "Accelerometer, gyroscope", P, "ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet"),
     ("Sensors", "Proximity", U, "The chip is found and reads about 45; not tried with anything near it"),
     ("Sensors", "Magnetometer", P, "AK8975 reads through ztOSIAL; no calibration or mounting matrix"),

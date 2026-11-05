@@ -73,4 +73,4 @@ fi
 # systemd-networkd runs the USB link's DHCP server (10-zboot-usb.network;
 # NetworkManager leaves usb0 alone), so the computer gets 172.16.42.2; the
 # USB serial port has a login (COM port on Windows, /dev/ttyACM0 on Linux)
-DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth ztos-talkman-wifi ztos-talkman-audio ztos-talkman-bluetooth"
+DEVICE_UNITS="zboot-usb-gadget zboot-firstboot systemd-networkd serial-getty@ttyGS0 bluetooth ztos-talkman-wifi ztos-talkman-audio ztos-talkman-bluetooth ztos-talkman-light"

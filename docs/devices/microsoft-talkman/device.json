@@ -179,8 +179,8 @@
     {
       "category": "Sensors",
       "feature": "Ambient light",
-      "status": "untested",
-      "notes": "The chip is found and ztOSIAL reads it, but it read 0 in a lit room"
+      "status": "working",
+      "notes": "Auto brightness follows the room, with its switch in Settings. The lux scale is an estimate"
     },
     {
       "category": "Sensors",

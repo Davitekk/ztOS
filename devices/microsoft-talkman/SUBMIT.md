@@ -62,7 +62,7 @@ The form starts with a list of features: set each one as below, and use
 | Audio | Speaker | working | TAS2553 amp behind the audio DSP, through PipeWire |
 | Audio | Microphone | broken | Not started: the WCD9330 codec has no driver in this kernel |
 | Audio | Headphones | broken | As the microphone |
-| Sensors | Ambient light | untested | The chip is found and ztOSIAL reads it, but it read 0 in a lit room |
+| Sensors | Ambient light | working | Auto brightness follows the room, with its switch in Settings. The lux scale is an estimate |
 | Sensors | Accelerometer, gyroscope | partial | ICM-20x48 family chip. Reads gravity with the phone flat; X and Y directions not checked yet |
 | Sensors | Proximity | untested | The chip is found and reads about 45; not tried with anything near it |
 | Sensors | Magnetometer | partial | AK8975 reads through ztOSIAL; no calibration or mounting matrix |
