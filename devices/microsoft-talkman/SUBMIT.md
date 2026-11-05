@@ -54,9 +54,9 @@ The form starts with a list of features: set each one as below, and use
 | Power | Sleep (suspend) | broken | Goes to sleep and wakes on a timer, then restarts while resuming. No CPU idle states yet either |
 | Network | Wi-Fi | working | QCA6174 on PCIe with ath10k. Joins a network from Settings and reaches the internet. 2.4 and 5 GHz |
 | Network | Bluetooth | working | QCA6174. Pairing and audio tried |
-| Network | Mobile data | broken | The modem boots by hand and answers AT commands, but does not get as far as the SIM |
+| Network | Mobile data | broken | The modem boots by hand and answers AT commands, but stays at SIM busy, so there is no signal |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
-| Modem | SIM and signal | broken | The modem boots by hand and answers AT commands, but reports the SIM busy |
+| Modem | SIM and signal | broken | The modem boots by hand and the SIM card answers raw commands, but the modem's SIM manager stays busy, so no signal |
 | Modem | SMS | broken | As SIM and signal |
 | Modem | Calls | broken | As SIM and signal |
 | Audio | Speaker | working | TAS2553 amp behind the audio DSP, through PipeWire |

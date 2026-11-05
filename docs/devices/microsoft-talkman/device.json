@@ -132,7 +132,7 @@
       "category": "Network",
       "feature": "Mobile data",
       "status": "broken",
-      "notes": "The modem boots by hand and answers AT commands, but does not get as far as the SIM"
+      "notes": "The modem boots by hand and answers AT commands, but stays at SIM busy, so there is no signal"
     },
     {
       "category": "Network",
@@ -144,7 +144,7 @@
       "category": "Modem",
       "feature": "SIM and signal",
       "status": "broken",
-      "notes": "The modem boots by hand and answers AT commands, but reports the SIM busy"
+      "notes": "The modem boots by hand and the SIM card answers raw commands, but the modem's SIM manager stays busy, so no signal"
     },
     {
       "category": "Modem",

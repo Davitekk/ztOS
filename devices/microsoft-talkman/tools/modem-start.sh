@@ -9,10 +9,22 @@
 # read, once, to private files, and rmtfs runs on those. Never give it -P, which writes to the partitions.
 #
 # Where it stands: the modem boots, its router services come up, and DATA1 to DATA4 answer AT commands
-# (see at()). AT+CFUN=1 is accepted, but AT+CPIN? stays at "SIM busy" and the SIM's pins stay low. DMS,
-# NAS, WDS, WMS and UIM never appear on the router, and no QMUX channel (DATA5_CNTL, DATA40_CNTL) opens,
-# even after a Data Port Mapper open-port request. A guess at why: the modem waits for the phone's side of
-# IPA, whose control service it does offer. This chip's IPA is v2.0, and the kernel's driver starts at v3.0.
+# (see at()). The radio starts off: send AT+CFUN=1.
+#
+# The SIM card works. The modem powers it and runs its start-up, and it answers raw commands:
+# AT+CSIM=14,"00A40004023F00" gets status 613A, AT+CSIM=10,"80F2000000" gets 9000. So the slot and its power
+# are fine, on this kernel as it is. Don't chase the NFC chip's enable line: the card answers the same with
+# the chip off and on.
+#
+# What is stuck is the modem's SIM manager: AT+CPIN? stays at "SIM busy", $QCSIMSTAT at UNKNOWN (SIM ERROR
+# after a radio restart), $QCSIMAPP at "No Service", so there is no signal. DMS, NAS, WDS, WMS and UIM never
+# appear on the router, and no QMUX channel (DATA5_CNTL, DATA40_CNTL) opens, even after a Data Port Mapper
+# open-port request. Without UIM there is no way to ask for a provisioning session, which is the likeliest
+# thing it waits for, on a firmware made for Windows. Not proven. The other guess is the phone's side of IPA,
+# whose control service the modem does offer: this chip's IPA is v2.0, and the kernel's driver starts at v3.0.
+#
+# The modem's own debug messages would settle it. DIAG answers commands and sends events, but the F3 messages
+# stayed off: the message mask requests (0x7d) get "bad parameter", and control channel masks did nothing.
 set -eu
 D=/var/lib/rmtfs
 R=/sys/class/remoteproc/remoteproc1
@@ -27,9 +39,15 @@ for p in "MODEM_FS1 modem_fs1" "MODEM_FS2 modem_fs2" "MODEM_FSC modem_fsc" "MODE
 done
 sync
 
+# In this order. If rmtfs is already running when the modem comes up, the kernel fails to announce it to
+# the modem ("failed to announce new service"), and the modem restarts itself 40 s later, for ever, with
+# "Watchdog detects stalled initialization".
+if [ "$(cat "$R/state")" != running ]; then
+	pkill -x rmtfs || true
+	echo start > "$R/state"
+	sleep 4
+fi
 pgrep -x rmtfs > /dev/null || (nohup rmtfs -o "$D" > /var/tmp/rmtfs.log 2>&1 &)
-sleep 1
-[ "$(cat "$R/state")" = running ] || echo start > "$R/state"
 sleep 30
 cat "$R/state"
 qrtr-lookup | awk '$4 == 0'
