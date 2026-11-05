@@ -36,10 +36,11 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Audio | Earpiece, microphones, headphones | Not working | Not started: on the WCD9330 codec over SLIMbus, which has no driver in this kernel |
 | Camera | Rear, 21 MP | Partial | Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
 | Camera | Front, 5 MP | Partial | Real pictures, in a dim room too; preview about 8 fps. Photos about 1.3 MP |
-| Camera | Iris camera, flash | Not working | Not started. The iris sensor shares the CSI PHY with the front camera |
+| Camera | Iris camera | Not working | Found, no picture yet. I2C 0x36 on CCI0, ID 0x0861, set up for 1928x1088 RAW10, with SMIA's settings registers but none of its capability tables, so the `ccs` driver cannot run it. It shares CSI2 with the front camera in combo mode (clock on PHY lane 3, data on lane 4), which camss does not do: tried by hand, the lane shows activity, and no frame arrived |
+| Camera | Flash | Not working | Not started |
 | Sensors | Magnetometer | Partial | AK8975: reads through ztOSIAL; no calibration or mounting matrix |
 | Sensors | Pressure | Untested | ZPA2326: reads a value |
-| Sensors | Ambient light, proximity | Untested | APDS-9930: ztOSIAL reads it. Light read 0 in a lit room; proximity reads about 45, not tried with anything near it. Its infrared LED pulses only while proximity is being read |
+| Sensors | Ambient light, proximity | Untested | APDS-9930: ztOSIAL reads it. Light reads 0 even at its highest gain and a 200 ms integration, in a dim room: to be tried in daylight; proximity reads about 45, not tried with anything near it. Its infrared LED pulses only while proximity is being read |
 | Sensors | Accelerometer, gyroscope | Partial | Not the MPU-6500 the device tree names but an ICM-20x48 family chip, with a small driver here. Lying still it reads 9.6 m/s2 down its Z axis, and the gyroscope and temperature are sensible. No mounting matrix yet: only Z has been checked, with the phone flat, so X and Y may be swapped or reversed |
 | Other | FM radio, NFC | Untested | Devices appear |
 | Location | GPS | Not working | Depends on the modem |

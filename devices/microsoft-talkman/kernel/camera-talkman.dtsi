@@ -7,8 +7,8 @@
  * camera connector, so no GPIO is driven and ccs resets it over I2C.
  * Front ("Ducati", on CCI0 and CSI2 lanes 0-1, two lanes), MCLK2 on GPIO 15, reset GPIO 104.
  *
- * Not here yet: the iris camera ("Siiri", CCI0, MCLK1 on GPIO 14, reset GPIO 102), one data
- * lane on CSI2's lanes 2-3, which share the PHY with the front camera, and the flash.
+ * Not here yet: the flash, and the iris camera ("Siiri", at 0x36 on CCI0, MCLK1 on GPIO 14, reset
+ * GPIO 102). See the README. One lane in combo mode on the front camera's PHY.
  *
  * The addresses are 7-bit: 0x20 in Qualcomm's downstream files is this address shifted.
  *
