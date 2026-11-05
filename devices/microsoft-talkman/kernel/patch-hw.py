@@ -89,6 +89,125 @@ TSL_EDITS = [
     ("#include <linux/delay.h>\n", "#include <linux/delay.h>\n#include <linux/workqueue.h>\n"),
 ]
 
+MSS = "drivers/remoteproc/qcom_q6v5_mss.c"
+
+# The modem: Android4Lumia950's msm8994-6.x branch has this much for the 950 XL
+MSS_DATA = """static const struct rproc_hexagon_res msm8994_mss = {
+	.hexagon_mba_image = "mba.mbn",
+	.proxy_supply = (struct qcom_mss_reg_res[]) {
+		{
+			.supply = "pll",
+			.uA = 100000,
+		},
+		{}
+	},
+	.active_supply = (struct qcom_mss_reg_res[]) {
+		{
+			.supply = "mss",
+			.uA = 100000,
+		},
+		{}
+	},
+	.proxy_clk_names = (char*[]){
+			"xo",
+			NULL
+	},
+	.active_clk_names = (char*[]){
+			"iface",
+			"bus",
+			"mem",
+			"gpll0_mss",
+			NULL
+	},
+	.proxy_pd_names = (char*[]){
+			"mx",
+			"cx",
+			NULL
+	},
+	.need_mem_protection = false,
+	.has_alt_reset = false,
+	.has_mba_logs = false,
+	.has_spare_reg = false,
+	.has_qaccept_regs = false,
+	.has_ext_cntl_regs = false,
+	.has_vq6 = false,
+	.version = MSS_MSM8994,
+};
+
+"""
+
+# Its Q6 powers up as in the downstream kernel's __pil_q6v55_reset, whose memories are all in the
+# power control register: not as the MSM8996's, the nearest case in this driver
+MSS_RESET = """	} else if (qproc->version == MSS_MSM8994) {
+		int bank;
+
+		writel(QDSP6SS_ACC_OVERRIDE_VAL, qproc->reg_base + QDSP6SS_STRAP_ACC);
+
+		/* Assert resets, stop core */
+		val = readl(qproc->reg_base + QDSP6SS_RESET_REG);
+		val |= Q6SS_CORE_ARES | Q6SS_BUS_ARES_ENABLE | Q6SS_STOP_CORE;
+		writel(val, qproc->reg_base + QDSP6SS_RESET_REG);
+
+		/* BHS requires the XO branch */
+		val = readl(qproc->reg_base + QDSP6SS_XO_CBCR);
+		val |= Q6SS_CBCR_CLKEN;
+		writel(val, qproc->reg_base + QDSP6SS_XO_CBCR);
+		ret = readl_poll_timeout(qproc->reg_base + QDSP6SS_XO_CBCR,
+					 val, !(val & Q6SS_CBCR_CLKOFF), 1,
+					 Q6SS_CBCR_TIMEOUT_US);
+		if (ret) {
+			dev_err(qproc->dev, "xo cbcr enabling timed out (rc:%d)\\n", ret);
+			return ret;
+		}
+
+		/* Power block headswitch, then past the LDO */
+		val = readl(qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		val |= QDSP6v56_BHS_ON;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		val |= readl(qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		udelay(1);
+		val |= QDSP6v56_LDO_BYP;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+
+		/* The memories, then the L2 banks one at a time */
+		val = readl(qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		val |= 0xfff00;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		for (bank = 0; bank <= 7; bank++) {
+			val |= BIT(bank);
+			writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		}
+
+		/* The clamps */
+		val &= ~QDSP6v56_CLAMP_WL;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		val &= ~Q6SS_CLAMP_IO;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+		val &= ~QDSP6v56_CLAMP_QMC_MEM;
+		writel(val, qproc->reg_base + QDSP6SS_PWR_CTL_REG);
+
+		/* Out of reset, and its clock */
+		val = readl(qproc->reg_base + QDSP6SS_RESET_REG);
+		val &= ~(Q6SS_CORE_ARES | Q6SS_STOP_CORE);
+		writel(val, qproc->reg_base + QDSP6SS_RESET_REG);
+		val = readl(qproc->reg_base + QDSP6SS_GFMUX_CTL_REG);
+		val |= Q6SS_CLK_ENABLE;
+		writel(val, qproc->reg_base + QDSP6SS_GFMUX_CTL_REG);
+		goto pbl_wait;
+"""
+
+MSS_EDITS = [
+    # This firmware's boot image too has its ELF header on: its PBL wants what follows
+    ("\tif ((qproc->version == MSS_MSM8974 ||\n", "\tif ((qproc->version == MSS_MSM8974 ||\n\t     qproc->version == MSS_MSM8994 ||\n"),
+    ("\tMSS_MSM8974,\n", "\tMSS_MSM8974,\n\tMSS_MSM8994,\n"),
+    ("\t} else if (qproc->version == MSS_MDM9607 ||\n\t\t   qproc->version == MSS_MSM8909 ||\n",
+     MSS_RESET + "\t} else if (qproc->version == MSS_MDM9607 ||\n\t\t   qproc->version == MSS_MSM8909 ||\n"),
+    ("static const struct of_device_id q6v5_of_match[] = {\n", MSS_DATA + "static const struct of_device_id q6v5_of_match[] = {\n"),
+    ('\t{ .compatible = "qcom,msm8996-mss-pil", .data = &msm8996_mss },\n',
+     '\t{ .compatible = "qcom,msm8994-mss-pil", .data = &msm8994_mss },\n'
+     '\t{ .compatible = "qcom,msm8996-mss-pil", .data = &msm8996_mss },\n'),
+]
+
 PAS_EDITS = [
     # The crypto engine's clock, taken only now and at the downstream kernel's 85.71 MHz: the
     # driver's second clock from here on, which it turns off when the DSP has taken over
@@ -368,6 +487,7 @@ def main():
     edit(source / GCC_IDS, [("#define MSS_RESET\t\t\t\t5\n", "#define MSS_RESET\t\t\t\t5\n#define PCIE_0_CORE_RESET\t\t6\n")])
     edit(source / PCIE, PCIE_EDITS)
     edit(source / PAS, PAS_EDITS)
+    edit(source / MSS, MSS_EDITS)
     edit(source / TSL, TSL_EDITS)
 
     imu = source / "drivers/iio/imu"

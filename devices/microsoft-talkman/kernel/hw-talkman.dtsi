@@ -158,9 +158,29 @@
 
 / {
 	reserved-memory {
-		/* what moving it leaves between the modem's memory and its own: not for the kernel */
-		adsp_hole_mem: adsp-hole@ca00000 {
-			reg = <0 0x0ca00000 0 0x400000>;
+		/*
+		 * The modem's copy of its file systems in memory, and its boot image. The downstream
+		 * kernel takes both from ordinary memory, wherever it has some.
+		 */
+		rmtfs_mem: rmtfs@f300000 {
+			compatible = "qcom,rmtfs-mem";
+			reg = <0 0x0f300000 0 0x180000>;
+			no-map;
+			qcom,client-id = <1>;
+		};
+
+		/*
+		 * Off limits. The tree's place for the boot image is in the phone's own "removed"
+		 * range, 0x5000000 to 0x7200000: writing there restarts the phone. Then what moving
+		 * the modem leaves below it.
+		 */
+		removed-mba@6e80000 {
+			reg = <0 0x06e80000 0 0x180000>;
+			no-map;
+		};
+
+		removed-below-modem@7000000 {
+			reg = <0 0x07000000 0 0x400000>;
 			no-map;
 		};
 	};
@@ -173,4 +193,80 @@
 &blsp2_uart2 {
 	/delete-property/ dmas;
 	/delete-property/ dma-names;
+};
+
+/*
+ * The modem, at the addresses in the phone's own downstream device tree: its memory ends where the
+ * audio DSP's begins. Its driver stays stopped until something starts it.
+ */
+&mpss_mem {
+	reg = <0 0x07400000 0 0x5a00000>;
+};
+
+&mba_mem {
+	reg = <0 0x0f500000 0 0x100000>;
+};
+
+&rfsa_mpss_mem {
+	/delete-property/ compatible;
+	/delete-property/ qcom,client-id;
+};
+
+&tcsr_mutex {
+	compatible = "qcom,msm8994-tcsr-mutex", "qcom,tcsr-mutex", "syscon";
+	reg = <0xfd484000 0x2000>;
+};
+
+&soc {
+	mss_pil: remoteproc@fc880000 {
+		compatible = "qcom,msm8994-mss-pil";
+		reg = <0xfc880000 0x100>, <0xfc820000 0x20>;
+		reg-names = "qdsp6", "rmb";
+
+		interrupts-extended = <&intc GIC_SPI 24 IRQ_TYPE_EDGE_RISING>,
+				      <&modem_smp2p_in 0 IRQ_TYPE_EDGE_RISING>,
+				      <&modem_smp2p_in 1 IRQ_TYPE_EDGE_RISING>,
+				      <&modem_smp2p_in 2 IRQ_TYPE_EDGE_RISING>,
+				      <&modem_smp2p_in 3 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "wdog", "fatal", "ready", "handover", "stop-ack";
+
+		clocks = <&rpmcc RPM_SMD_MSS_CFG_AHB_CLK>,
+			 <&gcc GCC_MSS_Q6_BIMC_AXI_CLK>,
+			 <&gcc GCC_BOOT_ROM_AHB_CLK>,
+			 <&gcc GPLL0_OUT_MSSCC>,
+			 <&xo_board>;
+		clock-names = "iface", "bus", "mem", "gpll0_mss", "xo";
+
+		resets = <&gcc MSS_RESET>;
+		reset-names = "mss_restart";
+
+		qcom,halt-regs = <&tcsr_mutex 0x1180 0x1200 0x1280>;
+
+		qcom,smem-states = <&modem_smp2p_out 0>;
+		qcom,smem-state-names = "stop";
+
+		power-domains = <&rpmpd MSM8994_VDDCX>, <&rpmpd MSM8994_VDDMX>;
+		power-domain-names = "cx", "mx";
+
+		pll-supply = <&vreg_l12a_1p8>;
+		mss-supply = <&vreg_s7a_1p0>;
+
+		firmware-name = "qcdsp1v28992.mbn", "qcdsp28992.mbn";
+
+		mba {
+			memory-region = <&mba_mem>;
+		};
+
+		mpss {
+			memory-region = <&mpss_mem>;
+		};
+
+		smd-edge {
+			interrupts = <GIC_SPI 25 IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&apcs 12>;
+			qcom,smd-edge = <0>;
+			qcom,remote-pid = <1>;
+			label = "modem";
+		};
+	};
 };

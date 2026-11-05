@@ -54,11 +54,11 @@ The form starts with a list of features: set each one as below, and use
 | Power | Sleep (suspend) | broken | Goes to sleep and wakes on a timer, then restarts while resuming. No CPU idle states yet either |
 | Network | Wi-Fi | working | QCA6174 on PCIe with ath10k. Joins a network from Settings and reaches the internet. 2.4 and 5 GHz |
 | Network | Bluetooth | working | QCA6174. Pairing and audio tried |
-| Network | Mobile data | broken | Not started: no modem driver for this chip in this kernel |
+| Network | Mobile data | broken | The modem boots by hand and answers AT commands, but does not get as far as the SIM |
 | Network | USB networking | working | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
-| Modem | SIM and signal | broken | Not started |
-| Modem | SMS | broken | Not started |
-| Modem | Calls | broken | Not started |
+| Modem | SIM and signal | broken | The modem boots by hand and answers AT commands, but reports the SIM busy |
+| Modem | SMS | broken | As SIM and signal |
+| Modem | Calls | broken | As SIM and signal |
 | Audio | Speaker | working | TAS2553 amp behind the audio DSP, through PipeWire |
 | Audio | Microphone | broken | Not started: the WCD9330 codec has no driver in this kernel |
 | Audio | Headphones | broken | As the microphone |

@@ -132,7 +132,7 @@
       "category": "Network",
       "feature": "Mobile data",
       "status": "broken",
-      "notes": "Not started: no modem driver for this chip in this kernel"
+      "notes": "The modem boots by hand and answers AT commands, but does not get as far as the SIM"
     },
     {
       "category": "Network",
@@ -144,19 +144,19 @@
       "category": "Modem",
       "feature": "SIM and signal",
       "status": "broken",
-      "notes": "Not started"
+      "notes": "The modem boots by hand and answers AT commands, but reports the SIM busy"
     },
     {
       "category": "Modem",
       "feature": "SMS",
       "status": "broken",
-      "notes": "Not started"
+      "notes": "As SIM and signal"
     },
     {
       "category": "Modem",
       "feature": "Calls",
       "status": "broken",
-      "notes": "Not started"
+      "notes": "As SIM and signal"
     },
     {
       "category": "Audio",

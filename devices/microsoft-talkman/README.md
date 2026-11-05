@@ -31,7 +31,7 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 | Network | USB networking | Works | RNDIS: 172.16.42.1 (the computer gets 172.16.42.2), plus a serial console |
 | Network | Wi-Fi | Works | QCA6174 on PCIe with ath10k, started after boot. Joins a network from Settings and reaches the internet: `ping google.com` 9 of 9, about 10 ms. Finds 2.4 and 5 GHz networks. PCIe link at Gen 1 |
 | Network | Bluetooth | Works | QCA6174 on `blsp2_uart2`. Pairing and audio tried. Its address is made from the installation's machine id, not the phone's own |
-| Modem | SIM, mobile data, SMS, calls | Not working | Not started: no driver for this chip's modem in this kernel |
+| Modem | SIM, mobile data, SMS, calls | Not working | The modem boots by hand, with its firmware and `rmtfs` on copies of its file systems, and answers AT commands on the `DATA1` to `DATA4` channels. It does not get as far as the SIM: `SIM busy`, and no signal. Not started in a normal boot |
 | Audio | Speaker | Works | TAS2553 amp behind the audio DSP, through PipeWire and its volume. Checked by recording it with a microphone beside the phone: tones at 440, 1500 and 3000 Hz, clean and loud |
 | Audio | Earpiece, microphones, headphones | Not working | Not started: on the WCD9330 codec over SLIMbus, which has no driver in this kernel |
 | Camera | Rear, 21 MP | Works | The preview does not look good. Real pictures; preview about 6 fps and soft. Focus is fixed (no lens driver), and photos are about 5 MP as the sensor's cells are not demosaiced. First pictures looked sharp at table distance |
@@ -98,6 +98,11 @@ with real use. **Not working**: tried and failing, or not started; the notes say
 - The secure firmware refuses the DSP unless the crypto engine's clock is on. That clock must not
   be under `clocks` in the device tree: the changed driver order makes the power controller stop
   answering on most boots. It is taken when the DSP starts (`ztos,crypto-clock`, `patch-hw.py`).
+- The modem's boot image goes in ordinary memory: the kernel tree's place for it is in the phone's
+  own "removed" range, 0x5000000 to 0x7200000, and writing there restarts the phone. Its firmware
+  is `qcdsp1v28992.mbn` and `qcdsp28992.mbn` from Android4Lumia950/firmware-microsoft-talkman.
+- **Never let `rmtfs` near the partitions `MODEM_FS1`, `MODEM_FS2`, `MODEM_FSC` or `MODEM_FSG`** (its
+  `-P`): they hold the phone's identity. Copy them to files, read-only, and run `rmtfs -o` on those.
 - PCIe starts after boot, from `ztos-talkman-wifi.service`, not while the kernel starts: Wi-Fi's
   firmware is on the root, and a fault then comes with SSH up. `lspci` should list the QCA6174.
 - The controller needs its core reset (`PCIE_0_CORE_RESET`, which the kernel's table left out).
